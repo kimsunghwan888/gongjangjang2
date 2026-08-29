@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>레시피북 홈</title>
+
+  <!-- CDN 은 모두 버전 고정 (Babel 은 반드시 7.x) -->
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+
+  <style>
+    /* 포털 사이트 특유의 한글 폰트 묶음 */
+    body {
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', Dotum, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* 가로 스크롤되는 퀵메뉴의 스크롤바 숨김 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-white text-[#222]">
+  <div id="root"></div>
+
+  <script type="text/babel">
+// ========================================
+// React Hooks
+// ========================================
+const { useState, useMemo, useCallback } = React;
+
+
+// ========================================
+// 📊 Data
+// ========================================
+
+// 포털의 상징색 (초록 포인트)
+const BRAND = '#03C75A';
+
+const CATEGORIES = [
+  { key: 'all',    label: '전체',     emoji: '🍽' },
+  { key: 'bap',    label: '한그릇밥', emoji: '🍚' },
+  { key: 'myeon',  label: '면요리',   emoji: '🍜' },
+  { key: 'guk',    label: '국·찌개',  emoji: '🍲' },
+  { key: 'banchan',label: '반찬',     emoji: '🥬' },
+  { key: 'anju',   label: '술안주',   emoji: '🍢' },
+  { key: 'snack',  label: '간식',     emoji: '🍪' },
+  { key: 'quick',  label: '10분요리', emoji: '⏱' },
+];
+
+// link 가 있으면 실제로 열리는 레시피, 없으면 아직 안 만든 것
+const RECIPES = [
+  {
+    name: '김치참치 덮밥',
+    desc: '냉장고 재료로 15분이면 끝나는 한 그릇',
+    minutes: 15,
+    cats: ['bap'],
+    ingredients: ['김치', '참치', '달걀', '밥', '설탕'],
+    link: 'index.html',
+    linkLabel: '레시피 보기',
+    thumb: 'assets/김치참치덮밥.jpg',
+    emoji: '🍚',
+    views: 128,
+    isNew: true,
+  },
+  {
+    name: '간장버터 밥',
+    desc: '버터 한 조각과 간장이면 끝나는 초간단 밥',
+    minutes: 5,
+    cats: ['bap', 'quick'],
+    ingredients: ['밥', '버터', '간장', '달걀'],
+    link: '간장버터-밥.docx',
+    linkLabel: '워드 파일 열기',
+    thumb: null,
+    emoji: '🧈',
+    views: 96,
+    isNew: false,
+  },
+  { name: '참치마요 덮밥', desc: '참치캔 하나로 만드는 든든한 덮밥', minutes: 10, cats: ['bap', 'quick'], ingredients: ['참치', '마요네즈', '밥', '달걀'], link: null, thumb: null, emoji: '🐟', views: 74 },
+  { name: '계란 볶음밥', desc: '찬밥 처리에 가장 좋은 기본 볶음밥', minutes: 10, cats: ['bap', 'quick'], ingredients: ['밥', '달걀', '대파', '간장'], link: null, thumb: null, emoji: '🍳', views: 71 },
+  { name: '스팸 김치찌개', desc: '스팸 한 캔이면 국물 맛이 완성', minutes: 25, cats: ['guk'], ingredients: ['김치', '스팸', '두부', '대파'], link: null, thumb: null, emoji: '🥘', views: 63 },
+  { name: '두부 김치', desc: '데친 두부에 볶은 김치만 올리면 끝', minutes: 15, cats: ['banchan', 'anju'], ingredients: ['두부', '김치', '돼지고기'], link: null, thumb: null, emoji: '🍲', views: 55 },
+  { name: '냉장고 비빔국수', desc: '남은 채소 아무거나 넣고 새콤달콤하게', minutes: 15, cats: ['myeon'], ingredients: ['소면', '고추장', '식초', '오이'], link: null, thumb: null, emoji: '🍝', views: 48 },
+  { name: '떡국 라면', desc: '라면에 떡만 넣으면 든든해지는 야식', minutes: 10, cats: ['myeon', 'quick'], ingredients: ['라면', '떡', '달걀', '김'], link: null, thumb: null, emoji: '🍜', views: 41 },
+  { name: '버터 간장 감자', desc: '전자레인지로 익혀 버터에 굴리기만', minutes: 12, cats: ['snack', 'anju'], ingredients: ['감자', '버터', '간장', '통깨'], link: null, thumb: null, emoji: '🥔', views: 33 },
+];
+
+// 냉장고에 흔히 있는 재료 (누르면 그 재료로 검색)
+const FRIDGE = ['김치', '참치', '달걀', '두부', '스팸', '버터', '대파', '감자'];
+
+const NOTICES = [
+  { tag: '새 레시피', text: '김치참치 덮밥에 칠리소스 곁들이기가 추가되었습니다.', date: '08.29' },
+  { tag: '안내',      text: '간장버터 밥은 워드 파일로 저장되어 있습니다.', date: '08.29' },
+  { tag: '준비 중',   text: '아직 표시만 되어 있는 레시피는 차차 채워 넣을 예정입니다.', date: '08.29' },
+];
+
+
+// ========================================
+// 🎨 Design System Components
+// ========================================
+
+function Button({ variant = 'primary', size = 'md', disabled = false, onClick, className = '', children, ...rest }) {
+  const base = 'inline-flex items-center justify-center gap-1.5 rounded-md font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#03C75A] disabled:opacity-40 disabled:cursor-not-allowed';
+  const variants = {
+    primary: 'bg-[#03C75A] text-white hover:brightness-95',
+    secondary: 'bg-white text-[#333] border border-[#dadde0] hover:bg-[#f7f8f9]',
+    ghost: 'bg-transparent text-[#666] hover:bg-[#f1f2f4]',
+  };
+  const sizes = {
+    sm: 'px-2.5 py-1 text-xs',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-5 py-3 text-base',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** 포털 특유의 흰 박스: 얇은 회색 테두리 + 제목줄 */
+function Card({ title, action, id, className = '', bodyClass = '', children }) {
+  return (
+    <section id={id} className={`rounded-xl border border-[#e5e8eb] bg-white ${className}`}>
+      {title && (
+        <header className="flex items-center justify-between border-b border-[#f0f1f3] px-5 py-3.5">
+          <h2 className="text-[17px] font-bold text-[#191919]">{title}</h2>
+          {action}
+        </header>
+      )}
+      <div className={`px-5 py-4 ${bodyClass}`}>{children}</div>
+    </section>
+  );
+}
+
+function Badge({ tone = 'gray', className = '', children }) {
+  const tones = {
+    gray:  'bg-[#f1f2f4] text-[#6b7280]',
+    green: 'bg-[#e8f9ef] text-[#00a94d]',
+    red:   'bg-[#fdecec] text-[#e0453a]',
+  };
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-bold ${tones[tone]} ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function Chip({ active = false, onClick, className = '', children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-3 py-1.5 text-[13px] font-bold transition-colors ${
+        active
+          ? 'border-[#03C75A] bg-[#03C75A] text-white'
+          : 'border-[#dadde0] bg-white text-[#555] hover:bg-[#f7f8f9]'
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+
+// ========================================
+// 🧩 Layout Components
+// ========================================
+
+/** 맨 위 얇은 유틸 줄 */
+function UtilityBar() {
+  return (
+    <div className="border-b border-[#f0f1f3]">
+      <div className="mx-auto flex max-w-[1130px] items-center justify-end gap-4 px-5 py-2 text-[12px] text-[#888]">
+        <span>2026. 08. 29. 토요일</span>
+        <span className="text-[#e5e8eb]">|</span>
+        <a href="index.html" className="hover:text-[#03C75A]">오늘의 레시피</a>
+        <a href="#tips" className="hover:text-[#03C75A]">요령 모음</a>
+      </div>
+    </div>
+  );
+}
+
+/** 로고 + 가운데 큰 초록 검색창 */
+function SearchHero({ query, onQueryChange }) {
+  return (
+    <div className="mx-auto max-w-[1130px] px-5 pb-6 pt-9">
+      <div className="mx-auto flex max-w-[620px] flex-col items-center">
+        <a href="레시피-홈.html" className="mb-6 flex items-center gap-2">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#03C75A] text-lg" aria-hidden="true">🍚</span>
+          <span className="text-[30px] font-black leading-none tracking-tight text-[#03C75A]">레시피북</span>
+        </a>
+
+        <div className="flex w-full items-center rounded-lg border-[3px] border-[#03C75A] bg-white">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="레시피 이름이나 재료로 검색하세요"
+            aria-label="레시피 검색"
+            className="h-[46px] flex-1 rounded-l-md bg-transparent px-4 text-[16px] outline-none placeholder:text-[#aaa]"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => onQueryChange('')}
+              aria-label="검색어 지우기"
+              className="px-2 text-[#bbb] hover:text-[#666]"
+            >
+              ✕
+            </button>
+          )}
+          <span
+            className="flex h-[46px] w-[52px] items-center justify-center text-[20px] text-[#03C75A]"
+            aria-hidden="true"
+          >
+            🔍
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 검색창 아래 동그란 아이콘 메뉴 */
+function QuickMenu({ category, onCategoryChange }) {
+  return (
+    <nav aria-label="분류 바로가기" className="mx-auto max-w-[1130px] px-5 pb-8">
+      <ul className="no-scrollbar flex justify-start gap-2 overflow-x-auto sm:justify-center">
+        {CATEGORIES.map((cat) => {
+          const active = category === cat.key;
+          return (
+            <li key={cat.key}>
+              <button
+                type="button"
+                onClick={() => onCategoryChange(cat.key)}
+                aria-pressed={active}
+                className="flex w-[74px] shrink-0 flex-col items-center gap-1.5 rounded-lg py-2 hover:bg-[#f7f8f9]"
+              >
+                <span
+                  className={`flex h-[46px] w-[46px] items-center justify-center rounded-full text-[22px] transition-colors ${
+                    active ? 'bg-[#03C75A] ring-2 ring-[#03C75A] ring-offset-2' : 'bg-[#f1f2f4]'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {cat.emoji}
+                </span>
+                <span className={`text-[12px] ${active ? 'font-bold text-[#03C75A]' : 'text-[#555]'}`}>
+                  {cat.label}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="border-t border-[#e5e8eb] bg-white">
+      <div className="mx-auto max-w-[1130px] px-5 py-8 text-[12px] leading-relaxed text-[#888]">
+        <p className="mb-2 font-bold text-[#555]">레시피북</p>
+        <p>개인이 직접 해 먹고 기록하는 요리 모음입니다. 화면 구성은 국내 포털 사이트의 배치를 참고했으며, 특정 회사와는 관계가 없습니다.</p>
+        <p className="mt-2">
+          사진 —{' '}
+          <a
+            className="underline underline-offset-2 hover:text-[#03C75A]"
+            href="https://commons.wikimedia.org/wiki/File:Kimchi_Fried_Rice,_Farm_Egg.jpg"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Kimchi Fried Rice, Farm Egg
+          </a>
+          , 촬영 T.Tseng,{' '}
+          <a
+            className="underline underline-offset-2 hover:text-[#03C75A]"
+            href="https://creativecommons.org/licenses/by/2.0/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            CC BY 2.0
+          </a>
+          , Wikimedia Commons.
+        </p>
+        <p className="mt-3 text-[#aaa]">마지막 수정 2026-08-29</p>
+      </div>
+    </footer>
+  );
+}
+
+
+// ========================================
+// 📄 Content Sections
+// ========================================
+
+function RecipeCard({ recipe }) {
+  const ready = !!recipe.link;
+
+  const thumb = recipe.thumb ? (
+    <img src={recipe.thumb} alt="" aria-hidden="true" className="h-full w-full object-cover" />
+  ) : (
+    <span className="flex h-full w-full items-center justify-center bg-[#f1f2f4] text-[40px]" aria-hidden="true">
+      {recipe.emoji}
+    </span>
+  );
+
+  const inner = (
+    <>
+      <div className="relative h-[124px] w-full overflow-hidden rounded-lg">
+        {thumb}
+        {!ready && (
+          <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-[12px] font-bold text-[#888]">
+            준비 중
+          </span>
+        )}
+      </div>
+
+      <div className="mt-2.5">
+        <p className="flex items-center gap-1.5">
+          <span className="text-[15px] font-bold text-[#191919]">{recipe.name}</span>
+          {recipe.isNew && <Badge tone="red">N</Badge>}
+        </p>
+        <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-[#777]">{recipe.desc}</p>
+        <p className="mt-2 flex items-center gap-2 text-[12px] text-[#999]">
+          <span>⏱ {recipe.minutes}분</span>
+          <span className="text-[#e5e8eb]">|</span>
+          <span>{recipe.ingredients.slice(0, 3).join(' · ')}</span>
+        </p>
+      </div>
+    </>
+  );
+
+  if (!ready) {
+    return (
+      <li className="cursor-default rounded-lg p-2 opacity-70">{inner}</li>
+    );
+  }
+
+  return (
+    <li>
+      <a
+        href={recipe.link}
+        className="block rounded-lg p-2 transition-colors hover:bg-[#f7f8f9]"
+        title={recipe.linkLabel}
+      >
+        {inner}
+      </a>
+    </li>
+  );
+}
+
+function RecipeGrid({ recipes, query, category, onReset }) {
+  const catLabel = CATEGORIES.find((c) => c.key === category);
+  const heading = query
+    ? `'${query}' 검색 결과`
+    : category === 'all'
+      ? '레시피 모아보기'
+      : catLabel.label + ' 레시피';
+
+  return (
+    <Card
+      title={heading}
+      action={<span className="text-[13px] text-[#999]">{recipes.length}개</span>}
+    >
+      {recipes.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-[32px]" aria-hidden="true">🔎</p>
+          <p className="mt-2 text-[15px] font-bold text-[#555]">찾는 레시피가 없습니다.</p>
+          <p className="mt-1 text-[13px] text-[#999]">다른 재료 이름으로 찾아보세요.</p>
+          <Button variant="secondary" size="md" className="mt-4" onClick={onReset}>
+            전체 레시피 보기
+          </Button>
+        </div>
+      ) : (
+        <ul className="grid grid-cols-2 gap-x-2 gap-y-4 sm:grid-cols-3">
+          {recipes.map((r) => <RecipeCard key={r.name} recipe={r} />)}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function NoticeBoard() {
+  return (
+    <Card title="새 소식" className="mt-4">
+      <ul className="divide-y divide-[#f5f6f7]">
+        {NOTICES.map((n, i) => (
+          <li key={i} className="flex items-center gap-3 py-2.5">
+            <Badge tone={n.tag === '준비 중' ? 'gray' : 'green'}>{n.tag}</Badge>
+            <span className="flex-1 truncate text-[14px] text-[#333]">{n.text}</span>
+            <span className="shrink-0 text-[12px] text-[#aaa]">{n.date}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function RankingWidget({ onPick }) {
+  const ranked = [...RECIPES].sort((a, b) => b.views - a.views).slice(0, 7);
+
+  return (
+    <Card title="많이 본 레시피" action={<span className="text-[12px] text-[#aaa]">이번 주</span>}>
+      <ol className="space-y-0.5">
+        {ranked.map((r, i) => (
+          <li key={r.name}>
+            <button
+              type="button"
+              onClick={() => onPick(r.name)}
+              className="flex w-full items-center gap-3 rounded px-1 py-1.5 text-left hover:bg-[#f7f8f9]"
+            >
+              <span
+                className={`w-4 shrink-0 text-[14px] font-black ${i < 3 ? 'text-[#03C75A]' : 'text-[#bbb]'}`}
+              >
+                {i + 1}
+              </span>
+              <span className="flex-1 truncate text-[14px] text-[#333]">{r.name}</span>
+              <span className="shrink-0 text-[12px] text-[#aaa]">{r.minutes}분</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
+function FridgeWidget({ onPick, active }) {
+  return (
+    <Card title="냉장고 재료로 찾기" className="mt-4">
+      <p className="mb-3 text-[13px] text-[#777]">지금 있는 재료를 누르면 그 재료가 들어간 레시피만 보여줍니다.</p>
+      <div className="flex flex-wrap gap-1.5">
+        {FRIDGE.map((ing) => (
+          <Chip key={ing} active={active === ing} onClick={() => onPick(active === ing ? '' : ing)}>
+            {ing}
+          </Chip>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function ShoppingMemo() {
+  const [items, setItems] = useState(['김치', '참치캔']);
+  const [draft, setDraft] = useState('');
+
+  const add = useCallback(() => {
+    const value = draft.trim();
+    if (!value) return;
+    setItems((prev) => (prev.indexOf(value) >= 0 ? prev : prev.concat([value])));
+    setDraft('');
+  }, [draft]);
+
+  return (
+    <Card title="장보기 메모" className="mt-4">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+          placeholder="살 것을 적으세요"
+          aria-label="장보기 항목 입력"
+          className="h-9 flex-1 rounded-md border border-[#dadde0] px-3 text-[14px] outline-none focus:border-[#03C75A]"
+        />
+        <Button size="md" onClick={add} disabled={!draft.trim()}>추가</Button>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="mt-3 text-center text-[13px] text-[#aaa]">적어둔 것이 없습니다.</p>
+      ) : (
+        <ul className="mt-3 space-y-1">
+          {items.map((item) => (
+            <li key={item} className="flex items-center gap-2 rounded px-1 py-1.5 hover:bg-[#f7f8f9]">
+              <span className="text-[#03C75A]" aria-hidden="true">•</span>
+              <span className="flex-1 text-[14px] text-[#333]">{item}</span>
+              <button
+                type="button"
+                onClick={() => setItems((prev) => prev.filter((x) => x !== item))}
+                aria-label={item + ' 지우기'}
+                className="px-1 text-[13px] text-[#bbb] hover:text-[#e0453a]"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function TipsWidget() {
+  return (
+    <Card title="오늘의 요령" className="mt-4" id="tips">
+      <div className="rounded-lg bg-[#f7fdf9] p-4">
+        <p className="text-[14px] font-bold text-[#00a94d]">⭐ 칠리소스를 곁들이면 맛있다</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[#555]">
+          김치참치 덮밥에 칠리소스를 조금 뿌리면 맛이 확 살아납니다. 직접 해보고 확인했습니다.
+        </p>
+      </div>
+      <ul className="mt-3 space-y-1.5 text-[13px] text-[#666]">
+        <li>· 김치가 시면 설탕을 조금 더 넣는다.</li>
+        <li>· 볶음밥·덮밥에는 찬밥이 더 낫다.</li>
+        <li>· 매우면 김치를 물에 한 번 헹군다.</li>
+      </ul>
+    </Card>
+  );
+}
+
+
+// ========================================
+// 🚀 App
+// ========================================
+
+function App() {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('all');
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return RECIPES.filter((r) => {
+      const inCategory = category === 'all' || r.cats.indexOf(category) >= 0;
+      if (!inCategory) return false;
+      if (!q) return true;
+      const haystack = (r.name + ' ' + r.desc + ' ' + r.ingredients.join(' ')).toLowerCase();
+      return haystack.indexOf(q) >= 0;
+    });
+  }, [query, category]);
+
+  const reset = useCallback(() => {
+    setQuery('');
+    setCategory('all');
+  }, []);
+
+  return (
+    <div className="min-h-screen">
+      <UtilityBar />
+      <SearchHero query={query} onQueryChange={setQuery} />
+      <QuickMenu category={category} onCategoryChange={setCategory} />
+
+      <main className="border-t border-[#e5e8eb] bg-[#f5f6f8] pb-10 pt-5">
+        <div className="mx-auto grid max-w-[1130px] gap-4 px-5 lg:grid-cols-[1fr_360px]">
+          <div>
+            <RecipeGrid recipes={filtered} query={query.trim()} category={category} onReset={reset} />
+            <NoticeBoard />
+          </div>
+
+          <aside>
+            <RankingWidget onPick={setQuery} />
+            <FridgeWidget onPick={setQuery} active={query} />
+            <ShoppingMemo />
+            <TipsWidget />
+          </aside>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}
+
+
+// ========================================
+// Rendering
+// ========================================
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

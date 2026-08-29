@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>김치참치 덮밥 · 15분 레시피</title>
+
+  <!-- CDN 은 모두 버전 고정 (Babel 은 반드시 7.x) -->
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+
+  <style>
+    /* Tailwind 로 표현하기 어려운 것만 */
+    @keyframes pulseRing {
+      0%   { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45); }
+      70%  { box-shadow: 0 0 0 18px rgba(244, 63, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+    }
+    .ring-pulse { animation: pulseRing 1.6s ease-out infinite; }
+
+    .tabular { font-variant-numeric: tabular-nums; }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #fff !important; }
+    }
+  </style>
+</head>
+<body class="bg-stone-50 text-stone-800">
+  <div id="root"></div>
+
+  <script type="text/babel">
+// ========================================
+// React Hooks
+// ========================================
+const { useState, useEffect, useRef, useCallback } = React;
+
+
+// ========================================
+// 📊 Recipe Data
+// ========================================
+const RECIPE = {
+  title: '김치참치 덮밥',
+  subtitle: '냉장고 재료로 15분이면 끝나는 한 그릇',
+  photo: 'assets/김치참치덮밥.jpg',
+  illustration: 'assets/김치참치덮밥-삽화.svg',
+};
+
+const INGREDIENTS = [
+  { group: 'must', name: '밥',               amount: 1,    unit: '공기' },
+  { group: 'must', name: '김치 (잘게 썰기)',  amount: 1,    unit: '컵' },
+  { group: 'must', name: '참치캔 (작은 것)',  amount: 1,    unit: '개' },
+  { group: 'must', name: '달걀',             amount: 1,    unit: '개' },
+  { group: 'must', name: '식용유',           amount: 1,    unit: '큰술' },
+  { group: 'must', name: '설탕',             amount: 0.5,  unit: '큰술' },
+  { group: 'must', name: '참기름',           amount: null, unit: '조금' },
+
+  { group: 'nice', name: '대파',             amount: null, unit: '조금' },
+  { group: 'nice', name: '김가루',           amount: null, unit: '조금' },
+  { group: 'nice', name: '통깨',             amount: null, unit: '조금' },
+  { group: 'nice', name: '칠리소스',         amount: null, unit: '조금', star: true },
+];
+
+const STEPS = [
+  {
+    range: '0 – 5분',
+    seconds: 300,
+    title: '김치를 볶는다',
+    detail: '팬에 식용유를 두르고 **김치를 중간 불에 3분** 볶습니다. **설탕 1/2큰술**을 넣어 신맛을 잡아요.',
+    tip: '김치가 많이 시면 설탕을 조금 더 넣으세요.',
+  },
+  {
+    range: '5 – 9분',
+    seconds: 240,
+    title: '참치를 넣는다',
+    detail: '기름을 뺀 **참치를 넣어 2~3분** 더 볶고, 불을 끈 뒤 **참기름 몇 방울**을 떨어뜨립니다.',
+    tip: '참치 대신 스팸이나 남은 고기를 써도 똑같이 됩니다.',
+  },
+  {
+    range: '9 – 13분',
+    seconds: 240,
+    title: '달걀을 부친다',
+    detail: '달걀은 **반숙**으로 부칩니다. 팬이 하나뿐이면 볶은 김치를 접시에 덜어두고 같은 팬을 쓰세요.',
+    tip: '노른자가 흐를 정도가 비벼 먹기 가장 좋습니다.',
+  },
+  {
+    range: '13 – 15분',
+    seconds: 120,
+    title: '그릇에 담는다',
+    detail: '**밥 → 김치참치 → 달걀** 순서로 올리고 김가루와 대파를 뿌립니다.',
+    tip: '칠리소스를 곁들이면 훨씬 맛있습니다.',
+  },
+];
+
+const TIPS = [
+  { star: true,  text: '**칠리소스를 곁들이면 맛있다.** (직접 해보고 확인 · 2026-08-29)' },
+  { star: false, text: '김치가 시면 **설탕**을 조금 더 넣는다.' },
+  { star: false, text: '참치 대신 **스팸·남은 고기**도 같은 방법.' },
+  { star: false, text: '**찬밥**이 질척해지지 않아 더 낫다.' },
+  { star: false, text: '매우면 김치를 **물에 한 번 헹군다**.' },
+];
+
+
+// ========================================
+// 🛠 Helpers
+// ========================================
+
+/** 0.5 → "1/2", 1.5 → "1과 1/2" 처럼 사람이 읽기 쉬운 분수로 */
+function formatAmount(n) {
+  if (n === null || n === undefined) return null;
+  const whole = Math.floor(n + 0.001);
+  const frac = n - whole;
+  let fracStr = '';
+  if (Math.abs(frac - 0.5) < 0.01) fracStr = '1/2';
+  else if (Math.abs(frac - 0.25) < 0.01) fracStr = '1/4';
+  else if (Math.abs(frac - 0.75) < 0.01) fracStr = '3/4';
+  else if (frac > 0.01) return String(Math.round(n * 10) / 10);
+
+  if (whole === 0) return fracStr || '0';
+  if (!fracStr) return String(whole);
+  return whole + '과 ' + fracStr;
+}
+
+/** 초 → "03:20" */
+function formatClock(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+/** 타이머가 끝났을 때 짧은 알림음 (별도 라이브러리 없이 브라우저 기본 기능) */
+function playChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    [880, 1174].forEach(function (freq, i) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const start = ctx.currentTime + i * 0.28;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+      osc.start(start);
+      osc.stop(start + 0.55);
+    });
+  } catch (e) {
+    /* 소리를 못 내는 환경이면 조용히 넘어간다 */
+  }
+}
+
+
+// ========================================
+// 🎨 Design System Components
+// ========================================
+
+function Button({ variant = 'primary', size = 'md', disabled = false, onClick, className = '', children, ...rest }) {
+  const base = 'inline-flex items-center justify-center gap-2 rounded-xl font-bold transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-rose-200 disabled:opacity-40 disabled:cursor-not-allowed';
+  const variants = {
+    primary: 'bg-rose-600 text-white hover:bg-rose-700',
+    secondary: 'bg-white text-stone-700 border-2 border-stone-300 hover:bg-stone-100',
+    danger: 'bg-stone-700 text-white hover:bg-stone-800',
+    ghost: 'bg-transparent text-stone-600 hover:bg-stone-200',
+  };
+  const sizes = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-5 py-2.5 text-base',
+    lg: 'px-7 py-4 text-lg',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Card({ className = '', children }) {
+  return (
+    <div className={`bg-white rounded-2xl shadow-sm border border-stone-200 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function Badge({ tone = 'neutral', className = '', children }) {
+  const tones = {
+    neutral: 'bg-stone-100 text-stone-600',
+    rose: 'bg-rose-100 text-rose-700',
+    amber: 'bg-amber-100 text-amber-800',
+    green: 'bg-emerald-100 text-emerald-700',
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-bold ${tones[tone]} ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function SectionTitle({ emoji, title, hint }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-stone-900">
+        <span className="mr-2" aria-hidden="true">{emoji}</span>{title}
+      </h2>
+      {hint && <p className="text-base text-stone-500">{hint}</p>}
+    </div>
+  );
+}
+
+/** **굵게** 표시를 실제 굵은 글씨로 바꿔주는 작은 도우미 */
+function Rich({ text }) {
+  return (
+    <>
+      {text.split('**').map(function (part, i) {
+        return i % 2 === 1
+          ? <strong key={i} className="font-black text-rose-700">{part}</strong>
+          : <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+
+// ========================================
+// 🧩 Layout Components
+// ========================================
+
+function Header() {
+  return (
+    <header className="relative overflow-hidden bg-stone-900 text-white">
+      <img
+        src={RECIPE.photo}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full object-cover opacity-30"
+      />
+      <div className="relative mx-auto max-w-5xl px-5 py-14 sm:py-20">
+        <div className="grid items-center gap-8 sm:grid-cols-[1fr_auto]">
+          <div>
+            <Badge tone="rose" className="mb-4">15분 · 1인분부터</Badge>
+            <h1 className="text-4xl sm:text-6xl font-black tracking-tight drop-shadow">
+              {RECIPE.title}
+            </h1>
+            <p className="mt-4 max-w-md text-lg sm:text-xl text-stone-200">
+              {RECIPE.subtitle}
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2 text-sm">
+              <span className="rounded-full bg-white/15 px-4 py-2 backdrop-blur">🍳 팬 하나면 충분</span>
+              <span className="rounded-full bg-white/15 px-4 py-2 backdrop-blur">⏱ 4단계</span>
+              <span className="rounded-full bg-white/15 px-4 py-2 backdrop-blur">🌶 칠리소스 강력 추천</span>
+            </div>
+          </div>
+
+          <img
+            src={RECIPE.illustration}
+            alt="밤 포장마차에서 김치참치 덮밥을 먹는 삽화"
+            className="mx-auto w-56 sm:w-72 rounded-2xl border border-white/20 bg-white/10 p-2 shadow-xl"
+          />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="mx-auto max-w-5xl px-5 pb-16 pt-10 text-sm leading-relaxed text-stone-500">
+      <hr className="mb-6 border-stone-200" />
+      <p>
+        사진 —{' '}
+        <a
+          className="underline decoration-stone-300 underline-offset-2 hover:text-stone-700"
+          href="https://commons.wikimedia.org/wiki/File:Kimchi_Fried_Rice,_Farm_Egg.jpg"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Kimchi Fried Rice, Farm Egg
+        </a>
+        , 촬영 T.Tseng,{' '}
+        <a
+          className="underline decoration-stone-300 underline-offset-2 hover:text-stone-700"
+          href="https://creativecommons.org/licenses/by/2.0/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          CC BY 2.0
+        </a>
+        , Wikimedia Commons.
+      </p>
+      <p className="mt-2">레시피북 · 마지막 수정 2026-08-29</p>
+    </footer>
+  );
+}
+
+
+// ========================================
+// 📄 Section: 재료 (인분 조절 + 체크리스트)
+// ========================================
+
+function IngredientRow({ item, servings, checked, onToggle }) {
+  const amountText = formatAmount(item.amount === null ? null : item.amount * servings);
+
+  return (
+    <li>
+      <label
+        className={`flex cursor-pointer items-center gap-4 rounded-xl border-2 px-4 py-3 transition-colors ${
+          checked ? 'border-emerald-200 bg-emerald-50' : 'border-transparent bg-stone-50 hover:bg-stone-100'
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          className="h-6 w-6 shrink-0 accent-emerald-600"
+        />
+        <span className={`flex-1 text-lg ${checked ? 'text-stone-400 line-through' : 'text-stone-800'}`}>
+          {item.star && <span className="mr-1" aria-hidden="true">⭐</span>}
+          {item.name}
+        </span>
+        <span className={`tabular shrink-0 text-lg font-bold ${checked ? 'text-stone-300' : 'text-stone-600'}`}>
+          {amountText ? amountText + ' ' + item.unit : item.unit}
+        </span>
+      </label>
+    </li>
+  );
+}
+
+function IngredientsSection() {
+  const [servings, setServings] = useState(1);
+  const [checked, setChecked] = useState({});
+
+  const toggle = useCallback(function (name) {
+    setChecked(function (prev) {
+      const next = Object.assign({}, prev);
+      next[name] = !prev[name];
+      return next;
+    });
+  }, []);
+
+  const mustHave = INGREDIENTS.filter(function (i) { return i.group === 'must'; });
+  const niceToHave = INGREDIENTS.filter(function (i) { return i.group === 'nice'; });
+  const checkedCount = INGREDIENTS.filter(function (i) { return checked[i.name]; }).length;
+
+  return (
+    <section className="mx-auto max-w-5xl px-5 py-10" aria-labelledby="ingredients-heading">
+      <div id="ingredients-heading">
+        <SectionTitle emoji="🧺" title="재료" hint="장 볼 때 하나씩 눌러서 체크하세요" />
+      </div>
+
+      {/* 인분 조절 */}
+      <Card className="mb-6 p-5 no-print">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-lg font-bold text-stone-800">몇 인분 만드시나요?</p>
+            <p className="text-sm text-stone-500">누르면 재료 양이 자동으로 계산됩니다.</p>
+          </div>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map(function (n) {
+              return (
+                <Button
+                  key={n}
+                  variant={servings === n ? 'primary' : 'secondary'}
+                  size="md"
+                  onClick={function () { setServings(n); }}
+                  aria-pressed={servings === n}
+                  className="w-20"
+                >
+                  {n}인분
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xl font-bold text-stone-900">꼭 필요한 것</h3>
+            <Badge tone="rose">{mustHave.length}가지</Badge>
+          </div>
+          <ul className="space-y-2">
+            {mustHave.map(function (item) {
+              return (
+                <IngredientRow
+                  key={item.name}
+                  item={item}
+                  servings={servings}
+                  checked={!!checked[item.name]}
+                  onToggle={function () { toggle(item.name); }}
+                />
+              );
+            })}
+          </ul>
+        </Card>
+
+        <Card className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xl font-bold text-stone-900">있으면 좋은 것</h3>
+            <Badge tone="amber">{niceToHave.length}가지</Badge>
+          </div>
+          <ul className="space-y-2">
+            {niceToHave.map(function (item) {
+              return (
+                <IngredientRow
+                  key={item.name}
+                  item={item}
+                  servings={servings}
+                  checked={!!checked[item.name]}
+                  onToggle={function () { toggle(item.name); }}
+                />
+              );
+            })}
+          </ul>
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            ⭐ 칠리소스는 없어도 되지만, 곁들이면 맛이 확 살아납니다.
+          </p>
+        </Card>
+      </div>
+
+      <p className="mt-4 text-center text-base text-stone-500 no-print">
+        준비 완료 <span className="font-bold text-stone-800">{checkedCount}</span> / {INGREDIENTS.length}
+      </p>
+    </section>
+  );
+}
+
+
+// ========================================
+// 📄 Section: 만드는 법 (단계별 타이머)
+// ========================================
+
+function StepCard({ step, index, isActive, isDone, onSelect }) {
+  return (
+    <Card
+      className={`overflow-hidden transition-shadow ${
+        isActive ? 'border-rose-300 shadow-md' : isDone ? 'border-emerald-200' : ''
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex w-full items-start gap-4 p-5 text-left hover:bg-stone-50"
+        aria-pressed={isActive}
+      >
+        <span
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl font-black ${
+            isDone ? 'bg-emerald-500 text-white' : isActive ? 'bg-rose-600 text-white' : 'bg-stone-200 text-stone-600'
+          }`}
+          aria-hidden="true"
+        >
+          {isDone ? '✓' : index + 1}
+        </span>
+
+        <span className="flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-xl font-bold text-stone-900">{step.title}</span>
+            <Badge tone={isDone ? 'green' : 'neutral'}>{step.range}</Badge>
+          </span>
+          <span className="mt-2 block text-lg leading-relaxed text-stone-700">
+            <Rich text={step.detail} />
+          </span>
+          <span className="mt-3 block rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
+            💡 {step.tip}
+          </span>
+        </span>
+      </button>
+    </Card>
+  );
+}
+
+function Timer({ step, stepIndex, onFinish }) {
+  const [remaining, setRemaining] = useState(step.seconds);
+  const [running, setRunning] = useState(false);
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+
+  // 단계가 바뀌면 타이머를 새로 맞춘다
+  useEffect(function () {
+    setRemaining(step.seconds);
+    setRunning(false);
+  }, [stepIndex, step.seconds]);
+
+  // 1초마다 감소
+  useEffect(function () {
+    if (!running) return undefined;
+    const id = setInterval(function () {
+      setRemaining(function (prev) {
+        if (prev <= 1) {
+          setRunning(false);
+          playChime();
+          onFinishRef.current();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return function () { clearInterval(id); };
+  }, [running]);
+
+  const progress = ((step.seconds - remaining) / step.seconds) * 100;
+  const finished = remaining === 0;
+
+  return (
+    <Card className="p-6 no-print">
+      <p className="text-center text-base text-stone-500">
+        {stepIndex + 1}단계 · {step.title}
+      </p>
+
+      <p
+        className={`tabular mt-2 text-center text-6xl sm:text-7xl font-black ${
+          finished ? 'text-emerald-600' : running ? 'text-rose-600' : 'text-stone-800'
+        }`}
+        aria-live="polite"
+      >
+        {formatClock(remaining)}
+      </p>
+
+      <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-stone-200">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${finished ? 'bg-emerald-500' : 'bg-rose-500'}`}
+          style={{ width: progress + '%' }}
+        />
+      </div>
+
+      {finished && (
+        <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-center text-lg font-bold text-emerald-800">
+          ⏰ 이 단계 끝! 다음 단계로 넘어가세요.
+        </p>
+      )}
+
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Button
+          size="lg"
+          variant={running ? 'secondary' : 'primary'}
+          onClick={function () { setRunning(function (r) { return !r; }); }}
+          disabled={finished}
+          className={running ? '' : 'ring-pulse'}
+        >
+          {running ? '⏸ 잠깐 멈춤' : '▶ 시작'}
+        </Button>
+        <Button
+          size="lg"
+          variant="ghost"
+          onClick={function () {
+            setRunning(false);
+            setRemaining(step.seconds);
+          }}
+        >
+          ↺ 처음으로
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function StepsSection() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [doneIndexes, setDoneIndexes] = useState([]);
+
+  // 타이머가 끝났을 때 "지금 몇 번째 단계였는지" 를 알기 위한 보관용
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
+
+  const handleFinish = useCallback(function () {
+    const finishedIndex = activeIndexRef.current;
+    setDoneIndexes(function (prev) {
+      return prev.indexOf(finishedIndex) >= 0 ? prev : prev.concat([finishedIndex]);
+    });
+  }, []);
+
+  const allDone = doneIndexes.length === STEPS.length;
+
+  return (
+    <section className="mx-auto max-w-5xl px-5 py-10" aria-labelledby="steps-heading">
+      <div id="steps-heading">
+        <SectionTitle emoji="🍳" title="만드는 법" hint="단계를 누르면 타이머가 그 단계로 맞춰집니다" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+        <div className="space-y-4">
+          {STEPS.map(function (step, i) {
+            return (
+              <StepCard
+                key={step.title}
+                step={step}
+                index={i}
+                isActive={i === activeIndex}
+                isDone={doneIndexes.indexOf(i) >= 0}
+                onSelect={function () { setActiveIndex(i); }}
+              />
+            );
+          })}
+        </div>
+
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <Timer step={STEPS[activeIndex]} stepIndex={activeIndex} onFinish={handleFinish} />
+
+          <div className="mt-4 flex gap-3 no-print">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={function () { setActiveIndex(function (i) { return Math.max(0, i - 1); }); }}
+              disabled={activeIndex === 0}
+            >
+              ← 이전
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={function () { setActiveIndex(function (i) { return Math.min(STEPS.length - 1, i + 1); }); }}
+              disabled={activeIndex === STEPS.length - 1}
+            >
+              다음 →
+            </Button>
+          </div>
+
+          {allDone && (
+            <p className="mt-4 rounded-xl bg-rose-50 px-4 py-4 text-center text-lg font-bold text-rose-800 no-print">
+              🎉 완성! 맛있게 드세요.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+// ========================================
+// 📄 Section: 요령
+// ========================================
+
+function TipsSection() {
+  return (
+    <section className="mx-auto max-w-5xl px-5 py-10" aria-labelledby="tips-heading">
+      <div id="tips-heading">
+        <SectionTitle emoji="✨" title="요령" hint="해보고 알게 된 것들" />
+      </div>
+
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {TIPS.map(function (tip, i) {
+          return (
+            <li key={i}>
+              <Card className={`h-full p-5 text-lg leading-relaxed ${tip.star ? 'border-amber-300 bg-amber-50' : ''}`}>
+                <span className="mr-2" aria-hidden="true">{tip.star ? '⭐' : '·'}</span>
+                <Rich text={tip.text} />
+              </Card>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+
+// ========================================
+// 📄 Section: 완성 사진
+// ========================================
+
+function PhotoSection() {
+  return (
+    <section className="mx-auto max-w-5xl px-5 py-10">
+      <SectionTitle emoji="📸" title="완성 모습" />
+      <Card className="overflow-hidden">
+        <img
+          src={RECIPE.photo}
+          alt="달걀 반숙을 올린 김치참치 덮밥 완성 사진"
+          className="h-72 w-full object-cover sm:h-96"
+        />
+      </Card>
+    </section>
+  );
+}
+
+
+// ========================================
+// 🚀 App
+// ========================================
+
+function App() {
+  return (
+    <div className="min-h-screen">
+      <Header />
+
+      <main>
+        <IngredientsSection />
+        <StepsSection />
+        <TipsSection />
+        <PhotoSection />
+
+        <div className="mx-auto max-w-5xl px-5 pb-4 text-center no-print">
+          <Button variant="secondary" size="lg" onClick={function () { window.print(); }}>
+            🖨 이 레시피 인쇄하기
+          </Button>
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}
+
+
+// ========================================
+// Rendering
+// ========================================
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
