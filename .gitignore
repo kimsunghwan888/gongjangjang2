@@ -20,5 +20,5 @@ __pycache__/
 dist/
 build/
 
-# 클로드 코드 개인 설정
-.claude/settings.local.json
+# 클로드 코드 도구·설정 폴더 (올릴 필요 없음)
+.claude/
