@@ -1,0 +1,181 @@
+<svg viewBox="0 0 1200 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="sceneTitle sceneDesc" preserveAspectRatio="xMidYMid slice">
+  <title id="sceneTitle">밤 포장마차의 한 그릇</title>
+  <desc id="sceneDesc">등불이 걸린 밤 포장마차에서 두 사람이 나란히 앉아, 김이 모락모락 오르는 덮밥 한 그릇을 앞에 두고 있는 삽화입니다.</desc>
+
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0F1730"/>
+      <stop offset="45%" stop-color="#2A1F3E"/>
+      <stop offset="78%" stop-color="#5A3038"/>
+      <stop offset="100%" stop-color="#7A4130"/>
+    </linearGradient>
+    <radialGradient id="moonGlow">
+      <stop offset="0%" stop-color="#FFF3D6" stop-opacity=".55"/>
+      <stop offset="100%" stop-color="#FFF3D6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lampGlow">
+      <stop offset="0%" stop-color="#FFB25A" stop-opacity=".55"/>
+      <stop offset="60%" stop-color="#FF8A3C" stop-opacity=".16"/>
+      <stop offset="100%" stop-color="#FF8A3C" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="lampBody" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#B93A20"/>
+      <stop offset="45%" stop-color="#F0803A"/>
+      <stop offset="100%" stop-color="#A8321C"/>
+    </linearGradient>
+    <linearGradient id="counter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5C3A2A"/>
+      <stop offset="18%" stop-color="#33201A"/>
+      <stop offset="100%" stop-color="#160E0D"/>
+    </linearGradient>
+    <linearGradient id="steamFade" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#FFF6E8" stop-opacity=".38"/>
+      <stop offset="100%" stop-color="#FFF6E8" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="vignette">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity=".5"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 밤하늘 -->
+  <rect width="1200" height="480" fill="url(#sky)"/>
+
+  <!-- 별 -->
+  <g fill="#FFF4DC">
+    <circle cx="96" cy="54" r="1.8" opacity=".75"/>
+    <circle cx="188" cy="122" r="1.3" opacity=".5"/>
+    <circle cx="292" cy="42" r="1.6" opacity=".65"/>
+    <circle cx="432" cy="96" r="1.2" opacity=".45"/>
+    <circle cx="612" cy="38" r="1.7" opacity=".7"/>
+    <circle cx="742" cy="112" r="1.2" opacity=".4"/>
+    <circle cx="880" cy="58" r="1.5" opacity=".6"/>
+    <circle cx="1128" cy="150" r="1.4" opacity=".5"/>
+  </g>
+
+  <!-- 달 -->
+  <circle cx="1012" cy="96" r="120" fill="url(#moonGlow)"/>
+  <circle cx="1012" cy="96" r="38" fill="#F8ECCF"/>
+  <circle cx="1026" cy="86" r="6" fill="#E6D6B4" opacity=".55"/>
+  <circle cx="1000" cy="110" r="4" fill="#E6D6B4" opacity=".45"/>
+
+  <!-- 멀리 보이는 마을 -->
+  <path fill="#160F22" d="M0,388 L0,306 L62,306 L62,272 L142,272 L142,314 L204,314 L204,250 L262,250 L262,228 L344,228 L344,292 L402,292 L402,262 L472,262 L472,300 L562,300 L562,238 L624,238 L624,206 L702,206 L702,268 L782,268 L782,302 L862,302 L862,254 L942,254 L942,290 L1022,290 L1022,264 L1102,264 L1102,306 L1200,306 L1200,388 Z"/>
+  <g fill="#F4B053">
+    <rect x="24" y="322" width="12" height="16" opacity=".85"/>
+    <rect x="84" y="288" width="11" height="15" opacity=".7"/>
+    <rect x="112" y="288" width="11" height="15" opacity=".5"/>
+    <rect x="164" y="330" width="12" height="16" opacity=".8"/>
+    <rect x="222" y="268" width="11" height="15" opacity=".75"/>
+    <rect x="284" y="246" width="12" height="16" opacity=".9"/>
+    <rect x="312" y="246" width="12" height="16" opacity=".55"/>
+    <rect x="360" y="308" width="11" height="15" opacity=".7"/>
+    <rect x="424" y="280" width="11" height="15" opacity=".6"/>
+    <rect x="496" y="318" width="12" height="16" opacity=".8"/>
+    <rect x="584" y="256" width="11" height="15" opacity=".85"/>
+    <rect x="644" y="224" width="12" height="16" opacity=".9"/>
+    <rect x="674" y="224" width="12" height="16" opacity=".6"/>
+    <rect x="722" y="286" width="11" height="15" opacity=".7"/>
+    <rect x="806" y="320" width="12" height="16" opacity=".75"/>
+    <rect x="884" y="272" width="11" height="15" opacity=".8"/>
+    <rect x="966" y="308" width="11" height="15" opacity=".6"/>
+    <rect x="1044" y="282" width="12" height="16" opacity=".85"/>
+    <rect x="1124" y="324" width="12" height="16" opacity=".7"/>
+  </g>
+
+  <!-- 등불 -->
+  <g>
+    <circle cx="120" cy="112" r="104" fill="url(#lampGlow)"/>
+    <circle cx="352" cy="86" r="96" fill="url(#lampGlow)"/>
+    <circle cx="606" cy="126" r="104" fill="url(#lampGlow)"/>
+    <circle cx="856" cy="80" r="92" fill="url(#lampGlow)"/>
+    <circle cx="1094" cy="122" r="96" fill="url(#lampGlow)"/>
+
+    <g stroke="#2A1A20" stroke-width="2.5">
+      <line x1="120" y1="0" x2="120" y2="80"/>
+      <line x1="352" y1="0" x2="352" y2="54"/>
+      <line x1="606" y1="0" x2="606" y2="94"/>
+      <line x1="856" y1="0" x2="856" y2="48"/>
+      <line x1="1094" y1="0" x2="1094" y2="90"/>
+    </g>
+
+    <g>
+      <ellipse cx="120" cy="112" rx="27" ry="34" fill="url(#lampBody)"/>
+      <ellipse cx="352" cy="86" rx="25" ry="32" fill="url(#lampBody)"/>
+      <ellipse cx="606" cy="126" rx="27" ry="34" fill="url(#lampBody)"/>
+      <ellipse cx="856" cy="80" rx="24" ry="31" fill="url(#lampBody)"/>
+      <ellipse cx="1094" cy="122" rx="26" ry="33" fill="url(#lampBody)"/>
+    </g>
+
+    <g fill="#FFDCA6" opacity=".8">
+      <ellipse cx="113" cy="106" rx="7" ry="12"/>
+      <ellipse cx="345" cy="80" rx="6" ry="11"/>
+      <ellipse cx="599" cy="120" rx="7" ry="12"/>
+      <ellipse cx="849" cy="74" rx="6" ry="11"/>
+      <ellipse cx="1087" cy="116" rx="7" ry="12"/>
+    </g>
+
+    <g stroke="#7A2A18" stroke-width="2" opacity=".7">
+      <line x1="98" y1="112" x2="142" y2="112"/>
+      <line x1="331" y1="86" x2="373" y2="86"/>
+      <line x1="584" y1="126" x2="628" y2="126"/>
+      <line x1="836" y1="80" x2="876" y2="80"/>
+      <line x1="1072" y1="122" x2="1116" y2="122"/>
+    </g>
+  </g>
+
+  <!-- 김 -->
+  <g fill="none" stroke="url(#steamFade)" stroke-width="8" stroke-linecap="round">
+    <path d="M792,322 C770,282 812,262 790,220 C772,186 806,168 796,142"/>
+    <path d="M824,326 C848,290 812,266 838,228 C858,196 828,176 842,150"/>
+    <path d="M810,318 C806,286 822,268 810,238"/>
+  </g>
+
+  <!-- 포장마차 상판 -->
+  <rect x="0" y="388" width="1200" height="92" fill="url(#counter)"/>
+  <rect x="0" y="388" width="1200" height="4" fill="#8A5B3C" opacity=".55"/>
+
+  <!-- 덮밥 한 그릇 -->
+  <g>
+    <ellipse cx="812" cy="392" rx="78" ry="12" fill="#0A0606" opacity=".55"/>
+    <path d="M748,338 C748,376 772,392 812,392 C852,392 876,376 876,338 Z" fill="#2A1C1A"/>
+    <path d="M748,338 C748,376 772,392 812,392 C852,392 876,376 876,338 Z" fill="none" stroke="#C98A4E" stroke-width="2.5" opacity=".5"/>
+    <ellipse cx="812" cy="338" rx="64" ry="14" fill="#3A2825"/>
+    <ellipse cx="812" cy="334" rx="57" ry="13" fill="#EFE3CB"/>
+    <g fill="#C4402A">
+      <ellipse cx="782" cy="336" rx="13" ry="5" transform="rotate(-12 782 336)"/>
+      <ellipse cx="838" cy="338" rx="12" ry="5" transform="rotate(9 838 338)"/>
+      <ellipse cx="806" cy="342" rx="10" ry="4" transform="rotate(-4 806 342)"/>
+    </g>
+    <ellipse cx="814" cy="328" rx="27" ry="12" fill="#FBF5E9"/>
+    <circle cx="814" cy="327" r="9.5" fill="#F0B33B"/>
+    <circle cx="810" cy="324" r="3" fill="#FBD98A" opacity=".8"/>
+    <g stroke="#A8C46A" stroke-width="2.5" stroke-linecap="round" opacity=".9">
+      <line x1="800" y1="320" x2="816" y2="316"/>
+      <line x1="820" y1="318" x2="834" y2="322"/>
+    </g>
+  </g>
+
+  <!-- 젓가락 -->
+  <g stroke="#C68A52" stroke-width="4" stroke-linecap="round" opacity=".85">
+    <line x1="906" y1="386" x2="978" y2="366"/>
+    <line x1="908" y1="394" x2="980" y2="376"/>
+  </g>
+
+  <!-- 나란히 앉은 두 사람 (뒷모습) -->
+  <g>
+    <path d="M268,480 C268,384 292,340 350,340 C408,340 432,384 432,480 Z" fill="#120C16"/>
+    <circle cx="350" cy="300" r="38" fill="#120C16"/>
+    <path d="M312,296 C312,268 330,254 350,254 C370,254 388,268 388,296 C378,282 322,282 312,296 Z" fill="#1B1220"/>
+    <path d="M268,480 C268,384 292,340 350,340" fill="none" stroke="#FFB765" stroke-width="3" opacity=".28"/>
+    <path d="M316,308 A38,38 0 0 1 336,266" fill="none" stroke="#FFB765" stroke-width="3" opacity=".3"/>
+
+    <path d="M470,480 C470,396 490,356 540,356 C590,356 610,396 610,480 Z" fill="#0D0912"/>
+    <circle cx="540" cy="322" r="33" fill="#0D0912"/>
+    <path d="M507,320 C507,296 522,284 540,284 C558,284 573,296 573,320 C564,308 516,308 507,320 Z" fill="#160E1B"/>
+    <path d="M610,480 C610,396 590,356 540,356" fill="none" stroke="#FFB765" stroke-width="3" opacity=".26"/>
+    <path d="M566,330 A33,33 0 0 0 548,292" fill="none" stroke="#FFB765" stroke-width="3" opacity=".28"/>
+  </g>
+
+  <rect width="1200" height="480" fill="url(#vignette)"/>
+</svg>

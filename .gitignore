@@ -1,0 +1,24 @@
+# 윈도우가 자동으로 만드는 파일
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# 맥이 자동으로 만드는 파일
+.DS_Store
+
+# 오피스(한글/워드/엑셀) 임시 파일
+~$*
+*.tmp
+
+# 기록 파일
+*.log
+
+# 개발 도구가 만드는 폴더
+node_modules/
+__pycache__/
+.venv/
+dist/
+build/
+
+# 클로드 코드 개인 설정
+.claude/settings.local.json
