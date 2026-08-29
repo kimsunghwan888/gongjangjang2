@@ -20,5 +20,8 @@ __pycache__/
 dist/
 build/
 
-# 클로드 코드 도구·설정 폴더 (올릴 필요 없음)
-.claude/
+# 클로드 코드 폴더 — 내가 만든 스킬만 올린다
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/recipe/
