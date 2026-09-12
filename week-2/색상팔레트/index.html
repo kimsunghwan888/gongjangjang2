@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>색상 팔레트</title>
+<style>
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; display:flex; flex-direction:column;
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    background:#1B1B19; color:#fff; overflow:hidden;
+  }
+
+  /* ---------- 위쪽 안내줄 ---------- */
+  header{
+    flex:none; background:#141412;
+    padding:14px 20px;
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    border-bottom:1px solid #2E2E2A;
+  }
+  header h1{
+    font-size:23px; margin:0; letter-spacing:-.5px; white-space:nowrap;
+  }
+  .guide{
+    flex:1; min-width:200px;
+    font-size:16px; color:#A8A69E; line-height:1.5;
+  }
+  .guide b{color:#fff;}
+  .kbd{
+    display:inline-block; background:#2E2E2A; color:#fff;
+    border:1px solid #45453F; border-bottom-width:2px;
+    border-radius:5px; padding:1px 9px; font-size:15px; font-weight:700;
+  }
+  header button{
+    font-family:inherit; font-size:18px; font-weight:800;
+    padding:13px 22px; border:0; border-radius:11px;
+    background:#fff; color:#1B1B19; cursor:pointer; white-space:nowrap;
+  }
+  header button:hover{background:#E3E1D9;}
+  header button:focus-visible{outline:3px solid #7AA7FF; outline-offset:2px;}
+
+  /* ---------- 색 5칸 ---------- */
+  main{flex:1; display:flex; min-height:0;}
+  @media (max-width:760px){ main{flex-direction:column;} }
+
+  .swatch{
+    flex:1; position:relative; cursor:pointer;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:6px;
+    border:0; padding:0; font-family:inherit;
+    transition:flex-grow .25s ease;
+    min-height:0;
+  }
+  .swatch:hover{flex-grow:1.15;}
+  .swatch:focus-visible{outline:4px solid #fff; outline-offset:-8px;}
+
+  .hex{
+    font-family:"Consolas","D2Coding",monospace;
+    font-size:30px; font-weight:700; letter-spacing:1px;
+  }
+  .tap{font-size:15px; opacity:.72;}
+  .name{font-size:17px; font-weight:700; opacity:.9;}
+
+  /* 자물쇠 */
+  .lock{
+    position:absolute; top:16px; right:16px;
+    width:52px; height:52px; border-radius:50%;
+    border:2px solid currentColor; background:transparent;
+    font-size:23px; line-height:1; cursor:pointer;
+    display:grid; place-items:center; opacity:.45;
+    font-family:inherit;
+  }
+  .swatch:hover .lock{opacity:.85;}
+  .lock:hover{opacity:1 !important;}
+  .lock:focus-visible{outline:3px solid #fff; outline-offset:2px; opacity:1;}
+  .lock.on{
+    opacity:1; background:currentColor;
+  }
+  .lock.on span{filter:invert(1) grayscale(1) contrast(3);}
+
+  /* 어두운 색 위 / 밝은 색 위 글자색 */
+  .swatch.dark{color:#FFFFFF;}
+  .swatch.light{color:#16160F;}
+
+  /* ---------- 복사 알림 ---------- */
+  #toast{
+    position:fixed; left:50%; bottom:40px; transform:translateX(-50%) translateY(20px);
+    background:#fff; color:#1B1B19;
+    font-size:21px; font-weight:800;
+    padding:16px 28px; border-radius:14px;
+    box-shadow:0 8px 30px rgba(0,0,0,.4);
+    opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+    display:flex; align-items:center; gap:12px;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  #toast .chip{width:26px; height:26px; border-radius:6px; border:1px solid rgba(0,0,0,.2);}
+
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>색상 팔레트</h1>
+  <p class="guide">
+    <span class="kbd">스페이스바</span> 새로 뽑기 &nbsp;·&nbsp;
+    <b>색을 누르면</b> 색 번호 복사 &nbsp;·&nbsp;
+    <b>자물쇠</b>를 잠그면 그 색은 안 바뀝니다
+  </p>
+  <span class="guide" id="scheme" style="flex:none; min-width:0;"></span>
+  <button type="button" id="newBtn">새로 뽑기</button>
+</header>
+
+<main id="palette"></main>
+
+<div id="toast"><span class="chip" id="toastChip"></span><span id="toastText"></span></div>
+
+<script>
+  var COUNT = 5;
+  var palette = document.getElementById('palette');
+  var schemeEl = document.getElementById('scheme');
+  var toast = document.getElementById('toast');
+  var toastText = document.getElementById('toastText');
+  var toastChip = document.getElementById('toastChip');
+
+  /* 색을 아무렇게나 뽑으면 안 어울립니다.
+     그래서 '색 고르는 방식' 네 가지 중 하나를 골라 규칙대로 뽑습니다. */
+  var SCHEMES = [
+    { name: '비슷한 색끼리',  fn: analogous },
+    { name: '한 가지 색의 농담', fn: mono },
+    { name: '반대색 섞기',    fn: complement },
+    { name: '삼각 배색',      fn: triad }
+  ];
+
+  var colors = [];   // {h,s,l,locked}
+
+  load();
+  if (colors.length !== COUNT) { generate(true); }
+  render();
+
+  /* ---------- 뽑기 ---------- */
+  function generate(all) {
+    var pick = SCHEMES[Math.floor(Math.random() * SCHEMES.length)];
+    var fresh = pick.fn(Math.floor(Math.random() * 360));
+    schemeEl.textContent = '방식 · ' + pick.name;
+
+    for (var i = 0; i < COUNT; i++) {
+      if (all || !colors[i] || !colors[i].locked) {
+        colors[i] = { h: fresh[i].h, s: fresh[i].s, l: fresh[i].l,
+                      locked: colors[i] ? colors[i].locked : false };
+        if (all) { colors[i].locked = false; }
+      }
+    }
+    save();
+  }
+
+  function analogous(h) {
+    var out = [], offs = [-40, -20, 0, 20, 40];
+    for (var i = 0; i < COUNT; i++) {
+      out.push({ h: wrap(h + offs[i]), s: rnd(48, 78), l: 28 + i * 13 });
+    }
+    return out;
+  }
+  function mono(h) {
+    var out = [], s = rnd(40, 72);
+    for (var i = 0; i < COUNT; i++) {
+      out.push({ h: wrap(h + rnd(-6, 6)), s: s, l: 24 + i * 14 });
+    }
+    return out;
+  }
+  function complement(h) {
+    var out = [], h2 = wrap(h + 180);
+    for (var i = 0; i < COUNT; i++) {
+      out.push({ h: (i % 2 === 0) ? wrap(h + rnd(-12, 12)) : wrap(h2 + rnd(-12, 12)),
+                 s: rnd(45, 80), l: 26 + i * 13 });
+    }
+    return out;
+  }
+  function triad(h) {
+    var out = [], hs = [h, wrap(h + 120), wrap(h + 240), h, wrap(h + 120)];
+    for (var i = 0; i < COUNT; i++) {
+      out.push({ h: wrap(hs[i] + rnd(-8, 8)), s: rnd(45, 76), l: 30 + i * 12 });
+    }
+    return out;
+  }
+
+  function wrap(h) { return ((h % 360) + 360) % 360; }
+  function rnd(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+
+  /* ---------- 색 계산 ---------- */
+  function hex(c) {
+    var s = c.s / 100, l = c.l / 100;
+    var k = function (n) { return (n + c.h / 30) % 12; };
+    var a = s * Math.min(l, 1 - l);
+    var f = function (n) {
+      var v = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+      return Math.round(255 * v);
+    };
+    return '#' + [f(0), f(8), f(4)].map(function (v) {
+      return ('0' + v.toString(16)).slice(-2).toUpperCase();
+    }).join('');
+  }
+
+  /* 배경이 밝으면 검은 글씨, 어두우면 흰 글씨 */
+  function isLight(c) {
+    var h = hex(c);
+    var r = parseInt(h.substr(1, 2), 16) / 255;
+    var g = parseInt(h.substr(3, 2), 16) / 255;
+    var b = parseInt(h.substr(5, 2), 16) / 255;
+    var lin = function (v) { return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+    return (0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)) > 0.32;
+  }
+
+  /* 대략적인 색 이름 */
+  function korName(c) {
+    if (c.s < 12) { return c.l > 70 ? '밝은 회색' : (c.l < 30 ? '검은 회색' : '회색'); }
+    var h = c.h, n;
+    if (h < 15 || h >= 345) { n = '빨강'; }
+    else if (h < 40)  { n = '주황'; }
+    else if (h < 68)  { n = '노랑'; }
+    else if (h < 160) { n = '초록'; }
+    else if (h < 200) { n = '청록'; }
+    else if (h < 255) { n = '파랑'; }
+    else if (h < 290) { n = '보라'; }
+    else if (h < 330) { n = '자주'; }
+    else { n = '분홍'; }
+    if (c.l >= 68) { return '연한 ' + n; }
+    if (c.l <= 34) { return '진한 ' + n; }
+    return n;
+  }
+
+  /* ---------- 그리기 ---------- */
+  function render() {
+    palette.innerHTML = colors.map(function (c, i) {
+      var code = hex(c);
+      var light = isLight(c);
+      return '<button class="swatch ' + (light ? 'light' : 'dark') + '"' +
+             ' style="background:' + code + '" data-i="' + i + '"' +
+             ' aria-label="' + code + ' 복사하기">' +
+        '<span class="hex">' + code + '</span>' +
+        '<span class="name">' + korName(c) + '</span>' +
+        '<span class="tap">눌러서 복사</span>' +
+        '<span class="lock' + (c.locked ? ' on' : '') + '" role="button" tabindex="0"' +
+             ' data-lock="' + i + '"' +
+             ' aria-label="' + (c.locked ? '잠금 풀기' : '이 색 고정하기') + '">' +
+          '<span>' + (c.locked ? '🔒' : '🔓') + '</span>' +
+        '</span>' +
+      '</button>';
+    }).join('');
+  }
+
+  /* ---------- 누르면 복사 / 자물쇠 ---------- */
+  palette.addEventListener('click', function (e) {
+    var lock = e.target.closest('[data-lock]');
+    if (lock) {
+      e.stopPropagation();
+      var li = Number(lock.getAttribute('data-lock'));
+      colors[li].locked = !colors[li].locked;
+      save(); render();
+      return;
+    }
+    var sw = e.target.closest('.swatch');
+    if (sw) { copy(hex(colors[Number(sw.getAttribute('data-i'))])); }
+  });
+
+  palette.addEventListener('keydown', function (e) {
+    var lock = e.target.closest('[data-lock]');
+    if (lock && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault(); e.stopPropagation();
+      lock.click();
+    }
+  });
+
+  /* ---------- 스페이스바 / 버튼 ---------- */
+  document.getElementById('newBtn').addEventListener('click', function () {
+    generate(false); render();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && !e.target.closest('[data-lock]')) {
+      e.preventDefault();          // 화면이 아래로 내려가지 않게
+      generate(false);
+      render();
+    }
+  });
+
+  /* ---------- 복사 ---------- */
+  function copy(code) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(function () { showToast(code); },
+                                              function () { fallback(code); });
+    } else {
+      fallback(code);
+    }
+  }
+  function fallback(code) {
+    var t = document.createElement('textarea');
+    t.value = code;
+    t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t);
+    t.select();
+    try { document.execCommand('copy'); showToast(code); }
+    catch (err) { alert('복사하지 못했습니다. 색 번호: ' + code); }
+    document.body.removeChild(t);
+  }
+
+  var toastTimer = null;
+  function showToast(code) {
+    toastChip.style.background = code;
+    toastText.textContent = code + ' 복사했습니다';
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1600);
+  }
+
+  /* ---------- 기억하기 ---------- */
+  function save() {
+    try { localStorage.setItem('palette', JSON.stringify(colors)); } catch (e) {}
+  }
+  function load() {
+    try {
+      var v = localStorage.getItem('palette');
+      if (v) { colors = JSON.parse(v); }
+    } catch (e) { colors = []; }
+  }
+</script>
+</body>
+</html>

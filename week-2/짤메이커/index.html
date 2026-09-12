@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>짤 만들기</title>
+<style>
+  :root{
+    --bg:#F2F0EC; --card:#FFFFFF; --ink:#17151A; --sub:#6B6670;
+    --line:#DEDAD5; --pink:#C2255C; --pink-soft:#FCEDF3;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:26px 16px 60px;
+    background:var(--bg); color:var(--ink);
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    font-size:20px; line-height:1.7; word-break:keep-all;
+  }
+  .wrap{max-width:1040px; margin:0 auto;}
+
+  h1{font-size:36px; margin:0 0 4px; letter-spacing:-1.5px;}
+  .lead{color:var(--sub); font-size:18px; margin:0 0 26px;}
+
+  .cols{display:grid; gap:22px;}
+  @media(min-width:880px){ .cols{grid-template-columns:1fr 1fr; align-items:start;} }
+
+  .box{
+    background:var(--card); border:2px solid var(--line);
+    border-radius:20px; padding:24px; margin-bottom:20px;
+  }
+  label{display:block; font-size:20px; font-weight:800; margin-bottom:10px;}
+  .cap{font-size:17px; font-weight:700; color:var(--sub); margin:22px 0 8px;}
+
+  input[type=text]{
+    width:100%; font-size:22px; padding:14px;
+    border:3px solid var(--line); border-radius:14px;
+    font-family:inherit; color:var(--ink); background:#fff;
+  }
+  input[type=text]:focus{border-color:var(--pink); outline:none;}
+
+  button{
+    font-family:inherit; font-size:19px; font-weight:800;
+    padding:16px 14px; border:2px solid var(--line); border-radius:14px;
+    background:#fff; color:var(--sub); cursor:pointer; width:100%;
+  }
+  button:hover{border-color:var(--pink); color:var(--pink);}
+  button:focus-visible{outline:3px solid var(--pink); outline-offset:2px;}
+  button.main{background:var(--pink); border-color:var(--pink); color:#fff; font-size:21px; padding:19px;}
+  button.main:hover{background:#A01B4B; border-color:#A01B4B; color:#fff;}
+  button:disabled{background:#EDEAE6; border-color:#EDEAE6; color:#B0AAA4; cursor:default;}
+
+  /* 글자 크기 조절 */
+  .sizer{display:flex; align-items:center; gap:14px;}
+  .sizer button{width:58px; flex:none; font-size:26px; padding:8px 0;}
+  input[type=range]{
+    flex:1; height:34px; accent-color:var(--pink); cursor:pointer;
+  }
+  .sizeNum{
+    flex:none; min-width:52px; text-align:center;
+    font-size:22px; font-weight:800; color:var(--pink);
+  }
+
+  /* 사진 넣는 곳 */
+  .drop{
+    border:3px dashed var(--line); border-radius:18px;
+    padding:34px 20px; text-align:center; color:var(--sub);
+    font-size:18px; line-height:1.8; background:#FBFAF9;
+    cursor:pointer;
+  }
+  .drop:hover, .drop.over{border-color:var(--pink); background:var(--pink-soft); color:var(--pink);}
+  .drop b{display:block; font-size:21px; color:var(--ink); margin-bottom:6px;}
+  #file{display:none;}
+
+  /* 미리보기 */
+  .peek{background:var(--card); border:2px solid var(--line); border-radius:20px; padding:20px;}
+  .peek .t{font-size:20px; font-weight:800; margin-bottom:14px;}
+  #canvas{
+    width:100%; height:auto; display:block; border-radius:10px;
+    background:#EDEAE6;
+  }
+  .empty{
+    text-align:center; color:var(--sub); font-size:18px;
+    padding:80px 20px; border:2px dashed var(--line); border-radius:12px;
+  }
+
+  .notice{
+    margin-top:22px; background:var(--pink-soft);
+    border-left:5px solid var(--pink); border-radius:0 14px 14px 0;
+    padding:16px 20px; font-size:17px; color:#7A1338;
+  }
+  .notice b{color:var(--pink);}
+  footer{margin-top:28px; font-size:16px; color:var(--sub); text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>짤 만들기</h1>
+  <p class="lead">사진을 고르고 글자를 넣으면 바로 만들어집니다.</p>
+
+  <div class="cols">
+
+    <!-- 왼쪽 : 만들기 -->
+    <div>
+      <div class="box">
+        <label>① 사진 고르기</label>
+        <div class="drop" id="drop">
+          <b>여기를 눌러 사진 고르기</b>
+          사진 파일을 이 칸으로 끌어다 놓아도 됩니다
+        </div>
+        <input type="file" id="file" accept="image/*">
+
+        <p class="cap">② 위에 넣을 글자</p>
+        <input type="text" id="top" placeholder="예) 오늘도" maxlength="60">
+
+        <p class="cap">③ 아래에 넣을 글자</p>
+        <input type="text" id="bottom" placeholder="예) 무사히 넘어갔다" maxlength="60">
+
+        <p class="cap">④ 글자 크기</p>
+        <div class="sizer">
+          <button type="button" id="minus" aria-label="글자 작게">−</button>
+          <input type="range" id="size" min="3" max="16" value="8" aria-label="글자 크기">
+          <button type="button" id="plus" aria-label="글자 크게">＋</button>
+          <span class="sizeNum" id="sizeNum">8</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오른쪽 : 미리보기 -->
+    <div>
+      <div class="peek">
+        <p class="t">미리보기</p>
+        <canvas id="canvas" width="800" height="600"></canvas>
+        <div class="empty" id="peekEmpty">왼쪽에서 사진을 고르면<br>여기에 나타납니다</div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <button type="button" class="main" id="saveBtn" disabled>그림으로 저장</button>
+      </div>
+
+      <div class="notice">
+        <b>사진은 밖으로 안 나갑니다.</b> 고른 사진은 어르신 컴퓨터 안에서만 쓰이고,
+        인터넷으로 어디에도 보내지지 않습니다.
+      </div>
+    </div>
+
+  </div>
+
+  <footer>글자는 흰색에 검은 테두리로 들어갑니다. 사진이 밝든 어둡든 잘 보입니다.</footer>
+
+</div>
+
+<script>
+  var MAXD = 1200;                       // 사진이 너무 크면 이 크기로 줄입니다
+
+  var fileEl  = document.getElementById('file');
+  var dropEl  = document.getElementById('drop');
+  var topEl   = document.getElementById('top');
+  var botEl   = document.getElementById('bottom');
+  var sizeEl  = document.getElementById('size');
+  var sizeNum = document.getElementById('sizeNum');
+  var canvas  = document.getElementById('canvas');
+  var peekEmpty = document.getElementById('peekEmpty');
+  var saveBtn = document.getElementById('saveBtn');
+
+  var ctx = canvas.getContext('2d');
+  var img = null;
+  var W = 0, H = 0;
+
+  canvas.style.display = 'none';
+
+  /* ---------- 사진 고르기 ---------- */
+  dropEl.addEventListener('click', function () { fileEl.click(); });
+  fileEl.addEventListener('change', function () {
+    if (fileEl.files && fileEl.files[0]) { load(fileEl.files[0]); }
+  });
+
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    dropEl.addEventListener(ev, function (e) {
+      e.preventDefault(); dropEl.classList.add('over');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    dropEl.addEventListener(ev, function (e) {
+      e.preventDefault(); dropEl.classList.remove('over');
+    });
+  });
+  dropEl.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { load(f); }
+  });
+
+  function load(file) {
+    if (!/^image\//.test(file.type)) {
+      alert('사진 파일이 아닙니다.\njpg, png 같은 사진을 골라 주세요.');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var im = new Image();
+      im.onload = function () {
+        img = im;
+        var scale = Math.min(1, MAXD / Math.max(im.width, im.height));
+        W = Math.round(im.width * scale);
+        H = Math.round(im.height * scale);
+        canvas.width = W; canvas.height = H;
+        canvas.style.display = '';
+        peekEmpty.style.display = 'none';
+        saveBtn.disabled = false;
+        dropEl.querySelector('b').textContent = '다른 사진으로 바꾸기';
+        draw();
+      };
+      im.onerror = function () { alert('사진을 읽지 못했습니다. 다른 사진으로 해보세요.'); };
+      im.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /* ---------- 글자·크기 ---------- */
+  topEl.addEventListener('input', draw);
+  botEl.addEventListener('input', draw);
+  sizeEl.addEventListener('input', function () {
+    sizeNum.textContent = sizeEl.value;
+    draw();
+  });
+  document.getElementById('minus').addEventListener('click', function () {
+    sizeEl.value = Math.max(Number(sizeEl.min), Number(sizeEl.value) - 1);
+    sizeNum.textContent = sizeEl.value; draw();
+  });
+  document.getElementById('plus').addEventListener('click', function () {
+    sizeEl.value = Math.min(Number(sizeEl.max), Number(sizeEl.value) + 1);
+    sizeNum.textContent = sizeEl.value; draw();
+  });
+
+  /* ---------- 그리기 ---------- */
+  function draw() {
+    if (!img) { return; }
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(img, 0, 0, W, H);
+
+    var fs = Math.round(W * Number(sizeEl.value) / 100);
+    var pad = Math.round(W * 0.04);
+    var maxW = W - pad * 2;
+    var lh = Math.round(fs * 1.14);
+
+    ctx.font = '900 ' + fs + 'px "Malgun Gothic","맑은 고딕",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
+    ctx.lineWidth = Math.max(2, Math.round(fs / 6));
+    ctx.strokeStyle = '#000000';
+    ctx.fillStyle = '#FFFFFF';
+
+    var t = topEl.value.trim();
+    if (t) {
+      ctx.textBaseline = 'top';
+      wrap(t, maxW).forEach(function (line, i) {
+        var y = pad + i * lh;
+        ctx.strokeText(line, W / 2, y);
+        ctx.fillText(line, W / 2, y);
+      });
+    }
+
+    var b = botEl.value.trim();
+    if (b) {
+      ctx.textBaseline = 'bottom';
+      var lines = wrap(b, maxW);
+      lines.forEach(function (line, i) {
+        var y = H - pad - (lines.length - 1 - i) * lh;
+        ctx.strokeText(line, W / 2, y);
+        ctx.fillText(line, W / 2, y);
+      });
+    }
+  }
+
+  /* 글자가 사진 폭보다 길면 여러 줄로 나눕니다 */
+  function wrap(text, maxW) {
+    var out = [], line = '';
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      var test = line + ch;
+      if (ctx.measureText(test).width > maxW && line !== '') {
+        var last = line[line.length - 1];
+        if (/[A-Za-z0-9]/.test(ch) && /[A-Za-z0-9]/.test(last)) {
+          var sp = line.lastIndexOf(' ');
+          if (sp > 0) { out.push(line.slice(0, sp)); line = line.slice(sp + 1) + ch; continue; }
+        }
+        out.push(line);
+        line = ch;
+      } else {
+        line = test;
+      }
+    }
+    out.push(line);
+    return out;
+  }
+
+  /* ---------- 저장 ---------- */
+  saveBtn.addEventListener('click', function () {
+    if (!img) { return; }
+    var a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = '짤.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+</script>
+</body>
+</html>

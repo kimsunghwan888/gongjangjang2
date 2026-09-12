@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>QR코드 생성기 사용설명서</title>
+<style>
+  @page{ size:A4; margin:0; }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  :root{
+    --ink:#1C1C1A; --sub:#6B6B64; --line:#DEDED8; --soft:#F5F5F2;
+    --green:#2F6F4E; --green-bg:#E8F2EC;
+    --red:#B3261E; --red-bg:#FDF1F0;
+  }
+
+  body{
+    margin:0; color:var(--ink); background:#fff;
+    font-family:"Malgun Gothic","맑은 고딕",sans-serif;
+    font-size:10.5pt; line-height:1.65; word-break:keep-all;
+  }
+
+  .page{
+    width:210mm; height:296mm; padding:16mm 15mm 13mm; overflow:hidden;
+    page-break-after:always; position:relative;
+    display:flex; flex-direction:column;
+  }
+  .page:last-child{ page-break-after:auto; }
+
+  .head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom:2.5pt solid var(--ink); padding-bottom:5pt; margin-bottom:11mm;
+  }
+  .head .t{ font-size:12pt; font-weight:700; letter-spacing:-.3pt; }
+  .head .n{ font-size:8.5pt; color:var(--sub); letter-spacing:.6pt; }
+
+  h1{ font-size:34pt; line-height:1.05; letter-spacing:-1.6pt; margin:0 0 4pt; font-weight:800; }
+  h2{ font-size:17pt; letter-spacing:-.6pt; margin:0 0 3pt; font-weight:800; }
+  h3{ font-size:11pt; margin:0 0 5pt; font-weight:700; color:var(--green); letter-spacing:-.2pt; }
+  .deck{ font-size:11.5pt; color:var(--sub); margin:0 0 9mm; }
+  .kicker{
+    font-size:8.5pt; font-weight:700; letter-spacing:2pt;
+    color:var(--green); text-transform:uppercase; margin:0 0 6pt;
+  }
+  p{ margin:0 0 6pt; }
+
+  .band{ background:var(--soft); border-radius:4pt; padding:7mm 6mm; margin-bottom:7mm; }
+  .band.green{ background:var(--green-bg); }
+  .band.red{ background:var(--red-bg); border-left:3pt solid var(--red); border-radius:0 4pt 4pt 0; }
+
+  /* 8단계 카드 */
+  .steps{ display:grid; grid-template-columns:1fr 1fr; gap:4mm; }
+  .step{
+    border:1pt solid var(--line); border-radius:4pt; padding:5mm 5.5mm;
+    display:grid; grid-template-columns:9mm 1fr; gap:3mm; align-items:start;
+  }
+  .step .no{
+    width:8mm; height:8mm; border-radius:50%;
+    background:var(--ink); color:#fff;
+    font-size:10pt; font-weight:800;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .step b{ display:block; font-size:11pt; letter-spacing:-.2pt; }
+  .step span{ font-size:9pt; color:var(--sub); line-height:1.5; }
+  .step.hi{ background:var(--green-bg); border-color:var(--green); }
+  .step.hi .no{ background:var(--green); }
+
+  table{ width:100%; border-collapse:collapse; font-size:9.5pt; }
+  th,td{ text-align:left; padding:3.6mm 3mm; border-bottom:.75pt solid var(--line); vertical-align:top; }
+  th{
+    font-size:8pt; letter-spacing:1pt; color:var(--sub);
+    text-transform:uppercase; border-bottom:1.5pt solid var(--ink); white-space:nowrap;
+  }
+  td:first-child{ font-weight:700; white-space:nowrap; }
+  .ok{ color:var(--green); font-weight:700; }
+  .no{ color:var(--red); font-weight:700; }
+  .say{ color:var(--green); font-weight:700; }
+
+  svg{ display:block; }
+  figcaption{ font-size:8.5pt; color:var(--sub); margin-top:3pt; text-align:center; }
+
+  .foot{
+    margin-top:auto; padding-top:5mm; border-top:.75pt solid var(--line);
+    font-size:8pt; color:var(--sub);
+    display:flex; justify-content:space-between;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== 1쪽 ===================== -->
+<div class="page">
+  <div class="head"><span class="t">QR코드 생성기</span><span class="n">공장장2 · 2026.08.31</span></div>
+
+  <p class="kicker">사용설명서</p>
+  <h1>QR코드<br>생성기</h1>
+  <p class="deck">글자를 흑백 무늬로 바꿔 주는 작은 프로그램.<br>파일 하나를 더블클릭하면 열립니다.</p>
+
+  <div class="band">
+    <h3>무슨 일이 일어나는가</h3>
+    <svg viewBox="0 0 620 132" width="100%">
+      <!-- 흐름도 -->
+      <g font-family="Malgun Gothic" >
+        <rect x="2" y="30" width="104" height="54" rx="6" fill="#fff" stroke="#1C1C1A" stroke-width="1.5"/>
+        <text x="54" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#1C1C1A">글자</text>
+        <text x="54" y="72" text-anchor="middle" font-size="10" fill="#6B6B64">naver.com</text>
+
+        <rect x="146" y="30" width="118" height="54" rx="6" fill="#E8F2EC" stroke="#2F6F4E" stroke-width="1.5"/>
+        <text x="205" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#2F6F4E">빌려온 부품</text>
+        <text x="205" y="72" text-anchor="middle" font-size="10" fill="#2F6F4E">무늬를 계산</text>
+
+        <rect x="304" y="30" width="104" height="54" rx="6" fill="#fff" stroke="#1C1C1A" stroke-width="1.5"/>
+        <text x="356" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#1C1C1A">흑백 무늬</text>
+        <text x="356" y="72" text-anchor="middle" font-size="10" fill="#6B6B64">QR코드</text>
+
+        <rect x="448" y="30" width="104" height="54" rx="6" fill="#fff" stroke="#1C1C1A" stroke-width="1.5"/>
+        <text x="500" y="54" text-anchor="middle" font-size="13" font-weight="700" fill="#1C1C1A">폰 카메라</text>
+        <text x="500" y="72" text-anchor="middle" font-size="10" fill="#6B6B64">비추면 읽힘</text>
+
+        <g stroke="#2F6F4E" stroke-width="1.5" fill="none">
+          <path d="M110 57 H140" marker-end="url(#a)"/>
+          <path d="M268 57 H298" marker-end="url(#a)"/>
+          <path d="M412 57 H442" marker-end="url(#a)"/>
+        </g>
+        <path d="M556 57 H600" stroke="#2F6F4E" stroke-width="1.5" fill="none" marker-end="url(#a)"/>
+        <text x="578" y="98" text-anchor="middle" font-size="10" fill="#2F6F4E" font-weight="700">원래 글자</text>
+
+        <text x="205" y="20" text-anchor="middle" font-size="9.5" fill="#6B6B64">인터넷 필요</text>
+      </g>
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="#2F6F4E"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+
+  <div class="band green">
+    <h3>QR코드는 컴퓨터가 읽는 점자입니다</h3>
+    <svg viewBox="0 0 620 176" width="100%">
+      <defs>
+        <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse">
+          <rect width="16" height="16" fill="#fff"/>
+          <rect x="0" y="0" width="8" height="8" fill="#1C1C1A"/>
+          <rect x="8" y="8" width="8" height="8" fill="#1C1C1A"/>
+        </pattern>
+      </defs>
+
+      <!-- QR 모형 -->
+      <rect x="212" y="8" width="160" height="160" fill="url(#dots)" stroke="#1C1C1A" stroke-width="1"/>
+      <!-- 모서리 세 개 -->
+      <g fill="#fff"><rect x="212" y="8" width="52" height="52"/><rect x="320" y="8" width="52" height="52"/><rect x="212" y="116" width="52" height="52"/></g>
+      <g fill="none" stroke="#1C1C1A" stroke-width="8">
+        <rect x="216" y="12" width="44" height="44"/><rect x="324" y="12" width="44" height="44"/><rect x="216" y="120" width="44" height="44"/>
+      </g>
+      <g fill="#1C1C1A"><rect x="232" y="28" width="12" height="12"/><rect x="340" y="28" width="12" height="12"/><rect x="232" y="136" width="12" height="12"/></g>
+
+      <g font-family="Malgun Gothic" font-size="11" fill="#2A4A3B">
+        <path d="M204 34 H120" stroke="#2F6F4E" stroke-width="1.2" fill="none"/>
+        <text x="116" y="30" text-anchor="end" font-weight="700">모서리 큰 네모 3개</text>
+        <text x="116" y="46" text-anchor="end" fill="#6B6B64">"여기가 위쪽" 표시 →</text>
+        <text x="116" y="62" text-anchor="end" fill="#6B6B64">비뚤게 찍어도 읽힘</text>
+
+        <path d="M380 96 H500" stroke="#2F6F4E" stroke-width="1.2" fill="none"/>
+        <text x="504" y="92" font-weight="700">촘촘한 점들</text>
+        <text x="504" y="108" fill="#6B6B64">← 글자가 길수록</text>
+        <text x="504" y="124" fill="#6B6B64">더 촘촘해짐</text>
+      </g>
+    </svg>
+  </div>
+
+  <table>
+    <thead><tr><th>담을 수 있는 것</th><th>담으면 안 되는 것</th></tr></thead>
+    <tbody>
+      <tr>
+        <td style="white-space:normal;font-weight:400;"><span class="ok">○</span> 홈페이지 주소 · 가게 위치 · 명함 정보 · 와이파이 이름 · 안내 문구</td>
+        <td style="white-space:normal;font-weight:400;"><span class="no">✕</span> 주민번호 · 계좌 비밀번호 · 인터넷뱅킹 비밀번호</td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="font-size:9pt;color:#6B6B64;margin-top:4pt;">암호가 걸린 것이 아니라, 글자를 무늬로 바꿔 놓았을 뿐입니다. 누구나 비추면 그대로 보입니다.</p>
+
+  <div class="foot"><span>QR코드 생성기 사용설명서</span><span>1 / 4</span></div>
+</div>
+
+<!-- ===================== 2쪽 ===================== -->
+<div class="page">
+  <div class="head"><span class="t">QR코드 생성기</span><span class="n">만드는 순서</span></div>
+
+  <h2>만드는 순서 8단계</h2>
+  <p class="deck">초록색 칸이 <b>사람이 하는 일</b>, 흰 칸은 <b>조수가 하는 일</b>입니다.</p>
+
+  <div class="steps">
+    <div class="step hi"><span class="no">1</span><div><b>폴더 만들기</b><span>앱이 살 집. "QR코드생성기 폴더 만들어줘"</span></div></div>
+    <div class="step hi"><span class="no">2</span><div><b>무엇을 만들지 정하기</b><span>크기 · 저장 방법 · 꾸밈. 여기서 90%가 결정됩니다.</span></div></div>
+    <div class="step hi"><span class="no">3</span><div><b>한 문장으로 시키기</b><span>처음엔 짧게. 보고 나서 고치는 편이 훨씬 쉽습니다.</span></div></div>
+    <div class="step"><span class="no">4</span><div><b>파일 적기</b><span>조수가 index.html 하나를 만듭니다. 1~2분.</span></div></div>
+    <div class="step hi"><span class="no">5</span><div><b>더블클릭해서 확인</b><span>폰 카메라로 비춰 보는 것이 진짜 시험입니다.</span></div></div>
+    <div class="step hi"><span class="no">6</span><div><b>안 되면 증상만 말하기</b><span>고치는 법은 몰라도 됩니다. "QR이 안 나와"</span></div></div>
+    <div class="step hi"><span class="no">7</span><div><b>다듬기</b><span>"색 바꿔줘" "더 크게" — 한 번에 완벽할 필요 없습니다.</span></div></div>
+    <div class="step"><span class="no">8</span><div><b>git 저장 + GitHub 올리기</b><span>찰칵(commit) → 금고에 맡기기(push)</span></div></div>
+  </div>
+
+  <div class="band green" style="margin-top:7mm;">
+    <h3>3단계에서 쓴 문장</h3>
+    <p style="font-size:11.5pt;line-height:1.7;margin:0;">
+      “글자나 인터넷 주소를 넣으면 QR코드가 나오고, 저장 버튼을 누르면
+      그림 파일로 내려받아지는 페이지를 index.html 하나로 만들어줘. 글자와 버튼은 크게.”
+    </p>
+  </div>
+
+  <h3 style="margin-top:3mm;">짧게 시킬까, 자세히 시킬까</h3>
+  <table>
+    <thead><tr><th></th><th>짧게 한 문장</th><th>자세히 여러 줄</th></tr></thead>
+    <tbody>
+      <tr><td>결과</td><td>기본 기능만</td><td>원하는 대로</td></tr>
+      <tr><td>좋은 점</td><td>돌아가는 걸 빨리 봄</td><td>다시 고칠 일이 적음</td></tr>
+      <tr><td>추천</td><td class="ok" style="font-weight:700;">처음엔 이쪽</td><td>원하는 게 확실할 때</td></tr>
+    </tbody>
+  </table>
+
+  <div class="foot"><span>QR코드 생성기 사용설명서</span><span>2 / 4</span></div>
+</div>
+
+<!-- ===================== 3쪽 ===================== -->
+<div class="page">
+  <div class="head"><span class="t">QR코드 생성기</span><span class="n">화면 사용법</span></div>
+
+  <h2>화면 사용법</h2>
+  <p class="deck">번호 순서대로 하시면 됩니다.</p>
+
+  <svg viewBox="0 0 620 330" width="100%" font-family="Malgun Gothic">
+    <!-- 화면 틀 -->
+    <rect x="112" y="4" width="396" height="322" rx="10" fill="#F5F5F2" stroke="#DEDED8" stroke-width="1.5"/>
+    <text x="136" y="36" font-size="17" font-weight="800" fill="#1C1C1A">QR코드 만들기</text>
+
+    <!-- 입력칸 -->
+    <rect x="132" y="52" width="356" height="76" rx="7" fill="#fff" stroke="#2F6F4E" stroke-width="2"/>
+    <text x="146" y="76" font-size="11" font-weight="700" fill="#1C1C1A">무엇을 QR코드로 만들까요?</text>
+    <text x="146" y="102" font-size="13" fill="#6B6B64">https://www.naver.com</text>
+    <text x="474" y="122" font-size="9" fill="#6B6B64" text-anchor="end">21 / 500 글자</text>
+
+    <!-- 크기 버튼 -->
+    <rect x="132" y="140" width="112" height="30" rx="7" fill="#fff" stroke="#DEDED8" stroke-width="1.5"/>
+    <text x="188" y="160" font-size="11" font-weight="700" fill="#6B6B64" text-anchor="middle">작게</text>
+    <rect x="254" y="140" width="112" height="30" rx="7" fill="#2F6F4E"/>
+    <text x="310" y="160" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">보통</text>
+    <rect x="376" y="140" width="112" height="30" rx="7" fill="#fff" stroke="#DEDED8" stroke-width="1.5"/>
+    <text x="432" y="160" font-size="11" font-weight="700" fill="#6B6B64" text-anchor="middle">크게</text>
+
+    <!-- QR -->
+    <rect x="132" y="182" width="356" height="96" rx="7" fill="#fff" stroke="#DEDED8" stroke-width="1.5"/>
+    <rect x="278" y="190" width="80" height="80" fill="url(#dots2)" stroke="#1C1C1A" stroke-width=".8"/>
+    <g fill="#fff"><rect x="278" y="190" width="26" height="26"/><rect x="332" y="190" width="26" height="26"/><rect x="278" y="244" width="26" height="26"/></g>
+    <g fill="none" stroke="#1C1C1A" stroke-width="4"><rect x="280" y="192" width="22" height="22"/><rect x="334" y="192" width="22" height="22"/><rect x="280" y="246" width="22" height="22"/></g>
+
+    <!-- 버튼 3개 -->
+    <rect x="132" y="290" width="112" height="28" rx="7" fill="#2F6F4E"/>
+    <text x="188" y="309" font-size="10.5" font-weight="700" fill="#fff" text-anchor="middle">그림으로 저장</text>
+    <rect x="254" y="290" width="112" height="28" rx="7" fill="#2F6F4E"/>
+    <text x="310" y="309" font-size="10.5" font-weight="700" fill="#fff" text-anchor="middle">PDF로 저장</text>
+    <rect x="376" y="290" width="112" height="28" rx="7" fill="#fff" stroke="#2F6F4E" stroke-width="1.5"/>
+    <text x="432" y="309" font-size="10.5" font-weight="700" fill="#2F6F4E" text-anchor="middle">인쇄하기</text>
+
+    <defs>
+      <pattern id="dots2" width="8" height="8" patternUnits="userSpaceOnUse">
+        <rect width="8" height="8" fill="#fff"/><rect width="4" height="4" fill="#1C1C1A"/><rect x="4" y="4" width="4" height="4" fill="#1C1C1A"/>
+      </pattern>
+    </defs>
+
+    <!-- 번호 콜아웃 -->
+    <g>
+      <circle cx="96" cy="90" r="13" fill="#B3261E"/><text x="96" y="95" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">1</text>
+      <path d="M110 90 H128" stroke="#B3261E" stroke-width="1.4"/>
+      <circle cx="96" cy="155" r="13" fill="#B3261E"/><text x="96" y="160" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">2</text>
+      <path d="M110 155 H128" stroke="#B3261E" stroke-width="1.4"/>
+      <circle cx="524" cy="230" r="13" fill="#B3261E"/><text x="524" y="235" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">3</text>
+      <path d="M510 230 H492" stroke="#B3261E" stroke-width="1.4"/>
+      <circle cx="524" cy="304" r="13" fill="#B3261E"/><text x="524" y="309" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">4</text>
+      <path d="M510 304 H492" stroke="#B3261E" stroke-width="1.4"/>
+    </g>
+  </svg>
+
+  <table style="margin-top:5mm;">
+    <thead><tr><th>번호</th><th>하는 일</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>글자 넣기</td><td style="white-space:normal;font-weight:400;">타이핑을 멈추면 곧바로 QR코드가 그려집니다. 최대 500자.</td></tr>
+      <tr><td>2</td><td>크기 고르기</td><td style="white-space:normal;font-weight:400;">작게 200 · 보통 320 · 크게 500. 인쇄해서 벽에 붙이려면 <b>크게</b>.</td></tr>
+      <tr><td>3</td><td>QR코드 확인</td><td style="white-space:normal;font-weight:400;">폰 카메라를 비추면 노란 알림이 뜹니다. 뜨면 성공.</td></tr>
+      <tr><td>4</td><td>저장 또는 인쇄</td><td style="white-space:normal;font-weight:400;">그림(PNG) · 문서(PDF) · 바로 인쇄 세 가지.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:5mm;">세 가지 저장 방법, 언제 무엇을</h3>
+  <table>
+    <thead><tr><th>버튼</th><th>나오는 것</th><th>이럴 때</th></tr></thead>
+    <tbody>
+      <tr><td>그림으로 저장</td><td>QR코드.png</td><td>카톡으로 보내기 · 문서에 붙여넣기</td></tr>
+      <tr><td>PDF로 저장</td><td>QR코드.pdf</td><td>인쇄소에 맡기기 · 메일 첨부</td></tr>
+      <tr><td>인쇄하기</td><td>종이 또는 PDF</td><td>바로 프린터로. 버튼과 설명은 안 나옵니다.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="foot"><span>QR코드 생성기 사용설명서</span><span>3 / 4</span></div>
+</div>
+
+<!-- ===================== 4쪽 ===================== -->
+<div class="page">
+  <div class="head"><span class="t">QR코드 생성기</span><span class="n">문제 해결</span></div>
+
+  <h2>안 될 때</h2>
+  <p class="deck">고치는 법은 몰라도 됩니다. <b>증상만 그대로 말하면</b> 됩니다.</p>
+
+  <table>
+    <thead><tr><th>증상</th><th>왜 그런가</th><th>이렇게 말하세요</th></tr></thead>
+    <tbody>
+      <tr><td>QR코드가 아예 안 나옴</td><td>부품을 못 빌려옴 (인터넷 끊김)</td><td class="say">"QR코드가 안 나와"</td></tr>
+      <tr><td>폰이 못 읽음</td><td>너무 작거나 화면이 어두움</td><td class="say">"QR코드를 더 크게 만들어줘"</td></tr>
+      <tr><td>저장이 안 됨</td><td>저장 방식 문제</td><td class="say">"저장 버튼이 안 돼"</td></tr>
+      <tr><td>한글이 깨짐</td><td>글자 방식(인코딩) 문제</td><td class="say">"한글도 되게 해줘"</td></tr>
+      <tr><td>글씨가 작음</td><td>—</td><td class="say">"글자를 더 크게 해줘"</td></tr>
+      <tr><td>고친 게 화면에 안 보임</td><td>브라우저가 옛날 것을 보여줌</td><td class="say">F5 또는 Ctrl+F5</td></tr>
+    </tbody>
+  </table>
+
+  <div class="band red" style="margin-top:7mm;">
+    <h3 style="color:#B3261E;">이 앱만 다른 점 — 인터넷이 필요합니다</h3>
+    <p style="margin:0;">나이계산기·디데이계산기는 계산이 뺄셈뿐이라 인터넷 없이 됩니다.
+    QR코드는 <b>무늬 계산을 남의 부품에 맡기고</b>, 그 부품을 인터넷 창고에서 빌려오기 때문에
+    <b>처음 열 때 인터넷 연결이 있어야</b> 합니다.</p>
+  </div>
+
+  <h2 style="margin-top:6mm;">지금까지 만든 것</h2>
+  <table>
+    <thead><tr><th>폴더</th><th>하는 일</th><th>인터넷</th></tr></thead>
+    <tbody>
+      <tr><td>나이계산기</td><td>만 나이 · 산 날 수 · 다음 생일</td><td class="ok">필요 없음</td></tr>
+      <tr><td>디데이계산기</td><td>기다리는 날까지 며칠</td><td class="ok">필요 없음</td></tr>
+      <tr><td>QR코드생성기</td><td>글자 → 흑백 무늬</td><td class="no">필요함</td></tr>
+      <tr><td>안내서</td><td>6과짜리 학습장</td><td class="ok">필요 없음</td></tr>
+    </tbody>
+  </table>
+
+  <div class="band green" style="margin-top:7mm;">
+    <h3>다음에 할 일</h3>
+    <p style="margin:0;">① 네 개를 git에 저장하고 GitHub에 올리기 → 휴대폰에서도 열립니다<br>
+    ② 색상 팔레트 만들기 → 3과의 문장을 그대로 쓰면 됩니다<br>
+    ③ 다 만들면 React로 한 집에 모으기 → "한 앱으로 합쳐줘" 한마디</p>
+  </div>
+
+  <div class="foot"><span>QR코드 생성기 사용설명서 · 버전 1.0</span><span>4 / 4</span></div>
+</div>
+
+</body>
+</html>

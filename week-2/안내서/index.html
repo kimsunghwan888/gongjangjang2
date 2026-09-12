@@ -1,0 +1,1118 @@
+<title>앱 만들기 학습장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --paper:#AFCDE9;
+    --card:#FFFFFF;
+    --grid:rgba(22,40,61,.07);
+    --ink:#16283D;
+    --ink-2:#2C3E52;
+    --ink-3:#3F5265;
+    --rule:#D3DEE8;
+    --rule-2:#E7EDF3;
+    --red:#8F251E;
+    --red-bg:#FBF0EE;
+    --blue:#1D5FA8;
+    --blue-bg:#EAF2FA;
+    --code-bg:#E9F0F7;
+    --shadow:0 1px 2px rgba(22,40,61,.06), 0 10px 28px rgba(22,40,61,.10);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#121A22;
+      --card:#1A242F;
+      --grid:rgba(190,210,230,.05);
+      --ink:#E8EDF2;
+      --ink-2:#B4C1CE;
+      --ink-3:#8394A5;
+      --rule:#2E3D4C;
+      --rule-2:#243140;
+      --red:#F08A7E;
+      --red-bg:#2C1E1C;
+      --blue:#8FBDEE;
+      --blue-bg:#17242F;
+      --code-bg:#101820;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#121A22;
+    --card:#1A242F;
+    --grid:rgba(190,210,230,.05);
+    --ink:#E8EDF2;
+    --ink-2:#B4C1CE;
+    --ink-3:#8394A5;
+    --rule:#2E3D4C;
+    --rule-2:#243140;
+    --red:#F08A7E;
+    --red-bg:#2C1E1C;
+    --blue:#8FBDEE;
+    --blue-bg:#17242F;
+    --code-bg:#101820;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  }
+
+  /* ---------- 인쇄용 흰 바탕 ----------
+     주소 뒤에 ?print=white 를 붙여 열면 종이색만 흰색이 됩니다.
+     잉크를 아끼려고 만든 것이고, 글자·표·색연필 색은 그대로입니다. */
+  :root[data-print="white"]{
+    --paper:#FFFFFF;
+    --card:#FFFFFF;
+    --grid:rgba(22,40,61,.05);
+    --ink:#16283D;
+    --ink-2:#2C3E52;
+    --ink-3:#46596B;
+    --rule:#D3DEE8;
+    --rule-2:#E7EDF3;
+    --red:#A62C22;
+    --red-bg:#FBF0EE;
+    --blue:#1D5FA8;
+    --blue-bg:#EAF2FA;
+    --code-bg:#F1F5F9;
+    --shadow:none;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    background-color:var(--paper);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:30px 30px;
+    color:var(--ink);
+    font-family:"IBM Plex Sans KR","Malgun Gothic","맑은 고딕",sans-serif;
+    font-size:19px;
+    line-height:1.8;
+    word-break:keep-all;
+  }
+
+  .page{
+    max-width:1180px;
+    margin:0 auto;
+    padding:0 24px 100px;
+    display:grid;
+    gap:56px;
+  }
+  @media (min-width:1040px){
+    .page{grid-template-columns:214px minmax(0,1fr); align-items:start;}
+    .cover{grid-column:1 / -1;}
+  }
+
+  /* ---------- 표지 ---------- */
+  .cover{
+    padding:78px 0 46px;
+    border-bottom:2px solid var(--ink);
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13px; font-weight:600;
+    letter-spacing:.22em; text-transform:uppercase;
+    color:var(--red);
+    margin:0 0 20px;
+  }
+  h1{
+    font-family:"Gowun Batang",serif;
+    font-weight:700;
+    font-size:clamp(46px,8vw,82px);
+    line-height:1.06;
+    letter-spacing:-.03em;
+    margin:0 0 22px;
+    text-wrap:balance;
+  }
+  .deck{
+    font-size:21px;
+    color:var(--ink-2);
+    max-width:34em;
+    margin:0;
+  }
+  .meta{
+    margin-top:34px;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13.5px;
+    color:var(--ink-3);
+    display:flex; flex-wrap:wrap; gap:8px 22px;
+  }
+
+  /* ---------- 차례 ---------- */
+  nav{font-size:16px;}
+  @media (min-width:1040px){ nav{position:sticky; top:36px;} }
+  .nav-head{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px; font-weight:600;
+    letter-spacing:.2em; text-transform:uppercase;
+    color:var(--ink-3);
+    padding-bottom:12px; margin-bottom:8px;
+    border-bottom:1px solid var(--rule);
+  }
+  nav ol{list-style:none; margin:0; padding:0; display:grid; gap:2px;}
+  nav a{
+    display:grid; grid-template-columns:26px 1fr; align-items:baseline;
+    gap:6px; padding:7px 8px; margin-left:-8px;
+    color:var(--ink-2); text-decoration:none; border-radius:6px;
+    line-height:1.4;
+  }
+  nav a span{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13px; color:var(--red);
+  }
+  nav a:hover{background:var(--blue-bg); color:var(--ink);}
+  nav a:focus-visible{outline:2px solid var(--blue); outline-offset:2px;}
+
+  /* ---------- 본문 ---------- */
+  main{display:grid; gap:74px; min-width:0;}
+  section{scroll-margin-top:26px;}
+
+  .lesson{
+    display:flex; align-items:baseline; gap:14px;
+    margin-bottom:8px;
+  }
+  .lesson .no{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:14px; font-weight:600; letter-spacing:.1em;
+    color:var(--red);
+    border:1.5px solid var(--red);
+    border-radius:3px;
+    padding:2px 8px;
+    flex:none;
+  }
+  h2{
+    font-family:"Gowun Batang",serif;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,40px);
+    line-height:1.2; letter-spacing:-.02em;
+    margin:0; text-wrap:balance;
+  }
+  .sub{
+    color:var(--ink-3); font-size:17px;
+    margin:0 0 30px; padding-bottom:18px;
+    border-bottom:1px solid var(--rule-2);
+  }
+  h3{
+    font-size:21px; font-weight:600;
+    margin:38px 0 12px; letter-spacing:-.01em;
+  }
+  p{margin:0 0 18px; max-width:40em;}
+  strong{font-weight:600;}
+  .lead{font-size:20px;}
+
+  /* ---------- 부품들 ---------- */
+  .card{
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:26px 28px;
+    box-shadow:var(--shadow);
+  }
+  .stack{display:grid; gap:18px;}
+
+  .defs{display:grid; gap:0; margin:0;}
+  .def{
+    display:grid; gap:2px 22px;
+    padding:20px 0;
+    border-top:1px solid var(--rule-2);
+  }
+  .def:first-child{border-top:0; padding-top:4px;}
+  @media (min-width:640px){ .def{grid-template-columns:200px 1fr;} }
+  .def dt{
+    font-weight:600; color:var(--ink);
+    font-size:19px;
+  }
+  .def dd{margin:0; color:var(--ink-2);}
+  .def .eq{
+    display:block; font-size:15px; color:var(--red);
+    font-family:"IBM Plex Mono",monospace; letter-spacing:-.01em;
+  }
+
+  ol.steps{
+    list-style:none; margin:0; padding:0;
+    display:grid; gap:0;
+    counter-reset:s;
+  }
+  ol.steps li{
+    counter-increment:s;
+    display:grid; grid-template-columns:44px 1fr; gap:18px;
+    padding:20px 0;
+    border-top:1px solid var(--rule-2);
+    align-items:start;
+  }
+  ol.steps li:first-child{border-top:0;}
+  ol.steps li::before{
+    content:counter(s);
+    font-family:"IBM Plex Mono",monospace;
+    font-size:15px; font-weight:600;
+    color:var(--card); background:var(--ink);
+    width:30px; height:30px; border-radius:50%;
+    display:grid; place-items:center;
+    margin-top:3px;
+  }
+  ol.steps b{display:block; font-weight:600; font-size:19px;}
+  ol.steps span{color:var(--ink-2); font-size:17px;}
+
+  code{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:.88em;
+    background:var(--code-bg);
+    padding:.16em .42em; border-radius:4px;
+    color:var(--ink);
+  }
+  pre{
+    font-family:"IBM Plex Mono",monospace;
+    background:var(--code-bg);
+    border:1px solid var(--rule-2);
+    border-radius:8px;
+    padding:18px 20px;
+    font-size:15px; line-height:1.7;
+    overflow-x:auto;
+    margin:0 0 18px;
+  }
+  pre code{background:none; padding:0;}
+
+  .say{
+    background:var(--blue-bg);
+    border-left:4px solid var(--blue);
+    border-radius:0 8px 8px 0;
+    padding:16px 20px;
+    margin:0;
+  }
+  .say .tag{
+    display:block;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--blue);
+    margin-bottom:6px;
+  }
+  .say q{font-size:18px; color:var(--ink); quotes:"“" "”";}
+
+  .warn{
+    background:var(--red-bg);
+    border-left:4px solid var(--red);
+    border-radius:0 8px 8px 0;
+    padding:16px 20px;
+    font-size:17.5px; color:var(--ink-2);
+  }
+  .warn b{color:var(--red);}
+
+  /* 앱 목록 */
+  .apps{display:grid; gap:16px;}
+  @media (min-width:760px){ .apps{grid-template-columns:1fr 1fr;} }
+  .app{
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-radius:10px;
+    padding:22px 24px;
+    display:grid; gap:10px;
+    box-shadow:var(--shadow);
+  }
+  .app .top{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .app h4{
+    margin:0; font-size:20px; font-weight:600;
+    font-family:"Gowun Batang",serif; letter-spacing:-.01em;
+  }
+  .dots{display:flex; gap:4px; flex:none;}
+  .dots i{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--rule); display:block;
+  }
+  .dots i.on{background:var(--red);}
+  .app p{margin:0; font-size:17px; color:var(--ink-2); max-width:none;}
+  .app .said{
+    font-size:15.5px; color:var(--ink-3);
+    border-top:1px dashed var(--rule);
+    padding-top:10px; margin:0;
+    font-style:normal;
+  }
+  .app .said b{color:var(--blue); font-weight:600;}
+
+  /* 표 */
+  .tablewrap{overflow-x:auto; margin:0 0 18px;}
+  table{
+    border-collapse:collapse; width:100%;
+    font-size:17.5px; min-width:440px;
+  }
+  th,td{
+    text-align:left; padding:14px 16px;
+    border-bottom:1px solid var(--rule-2);
+    vertical-align:top;
+  }
+  th{
+    font-size:13px; font-weight:600; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-3);
+    border-bottom:1.5px solid var(--rule);
+    white-space:nowrap;
+  }
+  td:first-child{font-weight:600; white-space:nowrap;}
+  td .mono{font-family:"IBM Plex Mono",monospace; font-size:15px; color:var(--red);}
+
+  /* 그림 */
+  figure{margin:0 0 20px;}
+  .diagram{
+    width:100%; height:auto; display:block;
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-radius:10px;
+  }
+  .d-box{fill:var(--card); stroke:var(--ink); stroke-width:1.5;}
+  .d-box-2{fill:var(--blue-bg); stroke:var(--blue); stroke-width:1.5;}
+  .d-t{fill:var(--ink); font-family:"IBM Plex Sans KR",sans-serif; font-size:16px; font-weight:600;}
+  .d-s{fill:var(--ink-3); font-family:"IBM Plex Sans KR",sans-serif; font-size:12.5px;}
+  .d-l{fill:var(--red); font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:600;}
+  .d-line{stroke:var(--red); stroke-width:1.5; fill:none;}
+  figcaption{font-size:15.5px; color:var(--ink-3); margin-top:10px;}
+
+  footer{
+    grid-column:1 / -1;
+    border-top:2px solid var(--ink);
+    padding-top:26px; margin-top:20px;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:13.5px; color:var(--ink-3);
+    display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between;
+  }
+
+  a{color:var(--blue);}
+  a:focus-visible{outline:2px solid var(--blue); outline-offset:3px; border-radius:3px;}
+  @media (prefers-reduced-motion:reduce){ *{animation:none !important; transition:none !important;} }
+
+  /* ---------- 인쇄 · PDF 로 뽑을 때 ---------- */
+  @media print{
+    @page{ size:A4; margin:14mm 15mm; }
+    body{
+      font-size:10.5pt; line-height:1.6;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact;
+    }
+    .page{ display:block; max-width:none; padding:0; gap:0; }
+
+    .cover{ padding:0 0 9mm; }
+    h1{ font-size:40pt; margin-bottom:12pt; }
+    .deck{ font-size:13pt; }
+    .meta{ margin-top:16pt; font-size:9pt; }
+
+    nav{ position:static; margin:0 0 4mm; font-size:11pt;
+         page-break-after:always; break-after:page; }
+    nav ol{ columns:2; column-gap:10mm; }
+    nav a{ margin-left:0; padding:4px 0; }
+
+    main{ display:block; gap:0; }
+    section{ page-break-before:always; break-before:page; }
+    .lesson{ margin-bottom:4pt; }
+    h2{ font-size:23pt; }
+    h3{ font-size:13pt; margin:14pt 0 5pt; }
+    .sub{ font-size:11pt; margin-bottom:12pt; padding-bottom:8pt; }
+    p{ font-size:10.5pt; margin-bottom:8pt; }
+    .lead{ font-size:11pt; }
+
+    .card{ padding:6mm 7mm; box-shadow:none; }
+    .apps{ grid-template-columns:1fr 1fr; gap:4mm; }
+    .app{ padding:5mm; box-shadow:none; }
+    .app h4{ font-size:13pt; }
+    .app p{ font-size:9.5pt; }
+    .app .said{ font-size:9pt; }
+
+    table{ font-size:9.5pt; min-width:0; }
+    th,td{ padding:7px 9px; }
+    pre{ font-size:8.5pt; padding:10px 12px; }
+    .say q{ font-size:11pt; }
+    .warn{ font-size:10pt; }
+    .def{ padding:10pt 0; }
+    .def dt{ font-size:11pt; }
+    ol.steps li{ padding:9pt 0; }
+    ol.steps b{ font-size:11pt; }
+    ol.steps span{ font-size:9.5pt; }
+
+    /* 한 덩어리가 두 쪽으로 잘리지 않게 */
+    .card, figure, .tablewrap, .app, .say, .warn, .def, ol.steps li, .stack{ break-inside:avoid; }
+    h2, h3, .lesson, thead{ break-after:avoid; }
+    tr{ break-inside:avoid; }
+
+    footer{ break-before:avoid; margin-top:10mm; padding-top:5mm; }
+    a{ text-decoration:none; }
+  }
+</style>
+
+<script>
+  /* 주소 뒤에 ?print=white 가 붙어 있으면 종이색을 흰색으로 바꿉니다 */
+  if (location.search.indexOf('print=white') > -1) {
+    document.documentElement.setAttribute('data-print', 'white');
+  }
+</script>
+
+<div class="page">
+
+  <header class="cover">
+    <p class="eyebrow">Claude Code · VSCode</p>
+    <h1>앱 만들기 학습장</h1>
+    <p class="deck">코드를 몰라도 됩니다. 무엇을 만들지 <strong>한국어로 말하기만</strong> 하면 됩니다. 아홉 번의 수업으로 작은 프로그램을 혼자 만들 수 있게 됩니다.</p>
+    <p class="meta">
+      <span>버전 1.3</span>
+      <span>2026년 8월 31일</span>
+      <span>c:\Users\LG\Desktop\공장장2</span>
+    </p>
+  </header>
+
+  <nav>
+    <p class="nav-head">차례</p>
+    <ol>
+      <li><a href="#l1"><span>1</span>세 가지만 알면 됩니다</a></li>
+      <li><a href="#l2"><span>2</span>무엇을 만들든 같은 5단계</a></li>
+      <li><a href="#l3"><span>3</span>만들 수 있는 여섯 가지</a></li>
+      <li><a href="#l4"><span>4</span>QR코드 생성기</a></li>
+      <li><a href="#l5"><span>5</span>색상 팔레트</a></li>
+      <li><a href="#l6"><span>6</span>PDF 생성기</a></li>
+      <li><a href="#l7"><span>7</span>지금까지 만든 것</a></li>
+      <li><a href="#l8"><span>8</span>git 과 GitHub</a></li>
+      <li><a href="#l9"><span>9</span>막힐 때 쓰는 말</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 1과 -->
+    <section id="l1">
+      <div class="lesson"><span class="no">1과</span></div>
+      <h2>세 가지만 알면 됩니다</h2>
+      <p class="sub">나머지는 몰라도 아무 문제 없습니다.</p>
+
+      <div class="card">
+        <dl class="defs">
+          <div class="def">
+            <dt>VSCode<span class="eq">= 커다란 공책</span></dt>
+            <dd>컴퓨터에게 시킬 말을 적어 두는 곳입니다. 워드와 비슷한 창이라고 생각하시면 됩니다.</dd>
+          </div>
+          <div class="def">
+            <dt>Claude Code<span class="eq">= 옆에 앉은 조수</span></dt>
+            <dd>한국어로 말하면 대신 적어 줍니다. 터미널에 <code>claude</code> 라고 치면 부를 수 있습니다.</dd>
+          </div>
+          <div class="def">
+            <dt>index.html<span class="eq">= 앱 한 개</span></dt>
+            <dd>조수가 다 적고 나면 생기는 파일입니다. <strong>더블클릭하면 인터넷 창에 앱이 뜹니다.</strong> 설치도, 인터넷에 올리는 것도 필요 없습니다.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <h3>이 파일 하나에 세 가지가 들어 있습니다</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>이름</th><th>역할</th><th>비유</th></tr></thead>
+          <tbody>
+            <tr><td>HTML</td><td>어디에 칸이 있고, 어디에 숫자가 나올지</td><td>뼈대</td></tr>
+            <tr><td>CSS</td><td>글자 크기, 색깔, 둥근 모서리</td><td>옷</td></tr>
+            <tr><td>JavaScript</td><td>계산하고 버튼에 반응하는 부분</td><td>머리</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>원래는 파일 세 개로 나누지만, 혼자 쓰고 더블클릭으로 여는 앱은 <strong>하나로 합치는 것이 훨씬 편합니다.</strong></p>
+    </section>
+
+    <!-- 2과 -->
+    <section id="l2">
+      <div class="lesson"><span class="no">2과</span></div>
+      <h2>무엇을 만들든 같은 5단계</h2>
+      <p class="sub">QR코드든 계산기든, 순서는 언제나 똑같습니다.</p>
+
+      <div class="card">
+        <ol class="steps">
+          <li><div><b>폴더 하나 만들기</b><span>앱이 살 집입니다. 바탕화면에 <code>내앱</code> 처럼.</span></div></li>
+          <li><div><b>VSCode에서 그 폴더 열기</b><span>파일 → 폴더 열기</span></div></li>
+          <li><div><b>조수 부르기</b><span>터미널에 <code>claude</code></span></div></li>
+          <li><div><b>하고 싶은 말 한국어로 적기</b><span>다음 장의 문장을 그대로 붙여넣으셔도 됩니다.</span></div></li>
+          <li><div><b>생긴 index.html 더블클릭</b><span>인터넷 창이 뜨면 완성입니다.</span></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 3과 -->
+    <section id="l3">
+      <div class="lesson"><span class="no">3과</span></div>
+      <h2>만들 수 있는 여섯 가지</h2>
+      <p class="sub">붉은 점이 많을수록 어렵습니다. 왼쪽 위부터 차례대로 하시면 됩니다.</p>
+
+      <div class="apps">
+
+        <article class="app">
+          <div class="top">
+            <h4>나이 · D-day 계산기</h4>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+          <p>생년월일을 넣으면 만 나이, 며칠 살았는지, 다음 생일까지 며칠인지 알려줍니다. 계산은 뺄셈 하나뿐이라 가장 쉽습니다.</p>
+          <p class="said"><b>이렇게 말하세요</b> — 생년월일을 넣으면 만 나이와 오늘까지 며칠 살았는지, 다음 생일까지 며칠 남았는지를 큰 글자로 보여주는 페이지를 만들어줘.</p>
+        </article>
+
+        <article class="app">
+          <div class="top">
+            <h4>QR코드 생성기</h4>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+          <p>글자나 인터넷 주소를 흑백 무늬 그림으로 바꿔 줍니다. 무늬 계산은 남이 만들어 둔 부품이 대신 해 줍니다. <strong>→ 만들었습니다. 4과 참고</strong></p>
+          <p class="said"><b>이렇게 말하세요</b> — 글자나 주소를 넣으면 QR코드가 나오고, 저장 버튼을 누르면 그림 파일로 내려받아지는 페이지를 만들어줘.</p>
+        </article>
+
+        <article class="app">
+          <div class="top">
+            <h4>색상 팔레트</h4>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+          </div>
+          <p>어울리는 색 다섯 개를 뽑아 줍니다. 색은 <code>#AFCDE9</code> 같은 번호로 적히고, 클릭하면 복사됩니다. 문서나 발표자료 색 고를 때 씁니다. <strong>→ 만들었습니다. 5과 참고</strong></p>
+          <p class="said"><b>이렇게 말하세요</b> — 스페이스바를 누르면 색 5개가 새로 바뀌고, 마음에 드는 색은 자물쇠로 고정하고, 클릭하면 색 번호가 복사되는 페이지를 만들어줘.</p>
+        </article>
+
+        <article class="app">
+          <div class="top">
+            <h4>PDF 생성기</h4>
+            <div class="dots"><i class="on"></i><i class="on"></i><i></i></div>
+          </div>
+          <p>PDF는 어디서 열어도 모양이 안 망가지는 파일입니다. 글을 넣고 버튼 한 번이면 문서가 만들어집니다. <strong>→ 만들었습니다. 6과 참고</strong></p>
+          <p class="said"><b>이렇게 말하세요</b> — 글을 입력하면 저장 버튼 하나로 PDF가 만들어지는 페이지를 만들어줘. 한글 폰트 꼭 넣어줘.</p>
+        </article>
+
+        <article class="app">
+          <div class="top">
+            <h4>짤(밈) 메이커</h4>
+            <div class="dots"><i class="on"></i><i class="on"></i><i></i></div>
+          </div>
+          <p>사진 위에 굵은 흰 글씨를 얹습니다. 컴퓨터 속 도화지 위에 그림을 그리는 방식입니다. 사진은 내 컴퓨터 안에서만 쓰이고 밖으로 나가지 않습니다.</p>
+          <p class="said"><b>이렇게 말하세요</b> — 사진을 고르면 위·아래에 글자를 넣고, 글자 크기를 조절해서 그림으로 저장되는 짤 만들기 페이지를 만들어줘.</p>
+        </article>
+
+        <article class="app">
+          <div class="top">
+            <h4>React로 만드는 SPA</h4>
+            <div class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          </div>
+          <p>SPA는 화면이 깜빡이며 새로 열리지 않고 <strong>한 화면 안에서 슥슥 바뀌는</strong> 앱입니다. React는 화면을 레고 블록처럼 조각내는 방식이라, 앞의 다섯 개를 한 집에 모을 때 씁니다.</p>
+          <p class="said"><b>이렇게 말하세요</b> — 왼쪽에 메뉴가 있고 QR·PDF·짤·D-day·색상이 모두 들어있는 한 페이지 앱을 index.html 하나로 만들어줘.</p>
+        </article>
+
+      </div>
+
+      <div class="warn" style="margin-top:24px;">
+        <b>PDF 만들 때 꼭 기억할 것</b> — “한글 폰트 꼭 넣어줘”라고 말하지 않으면 글자가 네모(□□□)로 깨져 나옵니다.
+      </div>
+    </section>
+
+    <!-- 4과 -->
+    <section id="l4">
+      <div class="lesson"><span class="no">4과</span></div>
+      <h2>QR코드 생성기</h2>
+      <p class="sub">처음으로 <strong>남의 부품을 빌려 쓴</strong> 앱입니다. 그래서 앞의 둘과 성질이 다릅니다.</p>
+
+      <h3>QR코드는 컴퓨터가 읽는 점자입니다</h3>
+      <p>글자를 흑백 네모칸 무늬로 바꿔 놓은 것입니다. 모서리의 큰 네모 세 개가 “여기가 위쪽”을 알려주기 때문에 비뚤게 비춰도 읽힙니다. 글자가 길수록 무늬는 촘촘해집니다.</p>
+
+      <figure>
+        <svg class="diagram" viewBox="0 0 660 130" role="img" aria-label="글자가 빌려온 부품을 거쳐 흑백 무늬가 되고, 휴대폰 카메라가 그것을 읽어 다시 글자가 되는 그림">
+          <rect class="d-box" x="18" y="40" width="120" height="58" rx="9"></rect>
+          <text class="d-t" x="78" y="68" text-anchor="middle">글자</text>
+          <text class="d-s" x="78" y="88" text-anchor="middle">naver.com</text>
+
+          <rect class="d-box-2" x="188" y="40" width="132" height="58" rx="9"></rect>
+          <text class="d-t" x="254" y="68" text-anchor="middle">빌려온 부품</text>
+          <text class="d-s" x="254" y="88" text-anchor="middle">무늬를 계산</text>
+
+          <rect class="d-box" x="370" y="40" width="120" height="58" rx="9"></rect>
+          <text class="d-t" x="430" y="68" text-anchor="middle">흑백 무늬</text>
+          <text class="d-s" x="430" y="88" text-anchor="middle">QR코드</text>
+
+          <rect class="d-box" x="540" y="40" width="102" height="58" rx="9"></rect>
+          <text class="d-t" x="591" y="68" text-anchor="middle">폰 카메라</text>
+          <text class="d-s" x="591" y="88" text-anchor="middle">다시 글자로</text>
+
+          <path class="d-line" d="M146 69 H180" marker-end="url(#ar2)"></path>
+          <path class="d-line" d="M328 69 H362" marker-end="url(#ar2)"></path>
+          <path class="d-line" d="M498 69 H532" marker-end="url(#ar2)"></path>
+          <text class="d-l" x="254" y="26" text-anchor="middle">인터넷 필요</text>
+
+          <defs>
+            <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0 L10 5 L0 10 z" style="fill:var(--red)"></path>
+            </marker>
+          </defs>
+        </svg>
+        <figcaption>무늬를 계산하는 일은 <strong>인터넷 창고에서 빌려온 부품</strong>이 대신 합니다.</figcaption>
+      </figure>
+
+      <h3>‘부품을 빌린다’는 것</h3>
+      <div class="card">
+        <dl class="defs">
+          <div class="def">
+            <dt>부품<span class="eq">= 남이 미리 만들어 둔 기능</span></dt>
+            <dd>어려운 말로 <strong>라이브러리</strong>라고 합니다. QR 무늬 계산처럼 까다로운 일은 직접 만들지 않고 빌려 씁니다.</dd>
+          </div>
+          <div class="def">
+            <dt>인터넷 창고<span class="eq">= cdnjs.cloudflare.com</span></dt>
+            <dd>부품이 쌓여 있는 곳입니다. 파일 맨 윗줄에서 이 창고 주소를 불러옵니다. QR 무늬용과 PDF용, <strong>두 개를 빌렸습니다.</strong></dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="warn" style="margin-top:22px;">
+        <b>그래서 이 앱만 인터넷이 필요합니다</b> — 나이계산기·디데이계산기는 계산이 뺄셈뿐이라 부품이 없습니다. QR코드 생성기는 열 때마다 창고에서 부품을 빌려오므로, 인터넷이 끊기면 “부품을 가져오지 못했습니다”라고 나옵니다.
+      </div>
+
+      <h3>색을 바꿀 때의 규칙</h3>
+      <p>QR코드는 <strong>어두운 색과 흰 바탕의 차이</strong>로 읽힙니다. 색이 밝으면 휴대폰이 무늬를 구분하지 못합니다.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>색</th><th>스캔</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td>진한 남색 · 군청</td><td>잘 읽힘</td><td><span class="mono">#1A3E8C</span> 지금 쓰는 색</td></tr>
+            <tr><td>검정</td><td>잘 읽힘</td><td><span class="mono">#111111</span> 처음 색</td></tr>
+            <tr><td>하늘색 · 연회색</td><td>안 읽힘</td><td>흰 바탕과 구분이 안 됨</td></tr>
+            <tr><td>노랑</td><td>안 읽힘</td><td>너무 밝음</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>세 가지 저장 방법</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>버튼</th><th>나오는 것</th><th>이럴 때</th></tr></thead>
+          <tbody>
+            <tr><td>그림으로 저장</td><td><span class="mono">QR코드.png</span></td><td>카톡으로 보내기 · 문서에 붙여넣기</td></tr>
+            <tr><td>PDF로 저장</td><td><span class="mono">QR코드.pdf</span></td><td>인쇄소에 맡기기 · 메일 첨부</td></tr>
+            <tr><td>인쇄하기</td><td>종이</td><td>바로 프린터로. 버튼과 설명은 안 나옵니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>PDF에서 한글이 깨지지 않게 한 방법</h3>
+      <p>PDF는 한글 글꼴이 없으면 글자가 네모(□□□)로 깨집니다. 그래서 <strong>종이 한 장을 통째로 그림으로 먼저 그린 뒤</strong>, 그 그림을 PDF에 넣었습니다. 화면에 보이는 그대로 나오므로 글꼴 문제가 아예 생기지 않습니다.</p>
+
+      <div class="warn">
+        <b>넣으면 안 되는 것</b> — 주민번호, 계좌·인터넷뱅킹 비밀번호. QR코드는 암호가 걸린 것이 아니라 글자를 무늬로 바꿔 놓았을 뿐이라, <strong>누구나 비추면 그대로 보입니다.</strong>
+      </div>
+
+      <div class="say" style="margin-top:24px;">
+        <span class="tag">이렇게 말했습니다</span>
+        <q>글자나 인터넷 주소를 넣으면 QR코드가 나오고, 저장 버튼을 누르면 그림 파일로 내려받아지는 페이지를 index.html 하나로 만들어줘. 글자와 버튼은 크게.</q>
+      </div>
+    </section>
+
+    <!-- 5과 -->
+    <section id="l5">
+      <div class="lesson"><span class="no">5과</span></div>
+      <h2>색상 팔레트</h2>
+      <p class="sub">지금까지 만든 것 중 유일하게 <strong>무엇을 ‘만드는’ 도구가 아니라 ‘고르는’ 도구</strong>입니다.</p>
+
+      <h3>쓰는 순서</h3>
+      <div class="card">
+        <ol class="steps">
+          <li><div><b>스페이스바를 누른다</b><span>색 5개가 통째로 새로 바뀝니다. 마음에 들 때까지 몇 번이고 누르세요. 오른쪽 위 [새로 뽑기] 버튼도 같은 일을 합니다.</span></div></li>
+          <li><div><b>마음에 드는 색은 자물쇠를 잠근다</b><span>색 오른쪽 위 🔓 를 누르면 🔒 로 바뀝니다. 잠근 색은 스페이스바를 눌러도 그대로 있습니다.</span></div></li>
+          <li><div><b>색을 눌러 번호를 복사한다</b><span>화면 아래에 “복사했습니다” 하고 알림이 뜹니다.</span></div></li>
+          <li><div><b>쓸 곳에 붙여넣는다</b><span>Ctrl+V. 문서에 넣든, 저에게 시키든 똑같습니다.</span></div></li>
+        </ol>
+      </div>
+
+      <h3>자물쇠가 이 도구의 핵심입니다</h3>
+      <p>5개가 한 번에 다 마음에 들 일은 거의 없습니다. <strong>마음에 드는 것부터 하나씩 잠가 가며 좁혀 나가는</strong> 방식입니다.</p>
+
+      <figure>
+        <svg class="diagram" viewBox="0 0 660 205" role="img" aria-label="스페이스바를 누를 때마다 색이 바뀌지만, 자물쇠를 잠근 색은 그대로 남는 것을 보여주는 그림">
+          <text class="d-s" x="96" y="42" text-anchor="end">1번째</text>
+          <rect x="110" y="18" width="100" height="38" rx="5" fill="#8C6B4A"></rect>
+          <rect x="218" y="18" width="100" height="38" rx="5" fill="#B5544A"></rect>
+          <rect x="326" y="18" width="100" height="38" rx="5" fill="#2E5C8A"></rect>
+          <rect x="434" y="18" width="100" height="38" rx="5" fill="#4E7A5C"></rect>
+          <rect x="542" y="18" width="100" height="38" rx="5" fill="#9E8AB5"></rect>
+
+          <text class="d-s" x="96" y="110" text-anchor="end">2번째</text>
+          <rect x="110" y="86" width="100" height="38" rx="5" fill="#6FA0CC"></rect>
+          <rect x="218" y="86" width="100" height="38" rx="5" fill="#A9C6DE"></rect>
+          <rect x="326" y="86" width="100" height="38" rx="5" fill="#2E5C8A"></rect>
+          <circle cx="376" cy="105" r="14" fill="#FFFFFF"></circle>
+          <text x="376" y="111" text-anchor="middle" font-size="15">🔒</text>
+          <rect x="434" y="86" width="100" height="38" rx="5" fill="#D7E6F1"></rect>
+          <rect x="542" y="86" width="100" height="38" rx="5" fill="#3F6E9B"></rect>
+
+          <text class="d-s" x="96" y="178" text-anchor="end">3번째</text>
+          <rect x="110" y="154" width="100" height="38" rx="5" fill="#6FA0CC"></rect>
+          <circle cx="160" cy="173" r="14" fill="#FFFFFF"></circle>
+          <text x="160" y="179" text-anchor="middle" font-size="15">🔒</text>
+          <rect x="218" y="154" width="100" height="38" rx="5" fill="#C3DAEA"></rect>
+          <rect x="326" y="154" width="100" height="38" rx="5" fill="#2E5C8A"></rect>
+          <circle cx="376" cy="173" r="14" fill="#FFFFFF"></circle>
+          <text x="376" y="179" text-anchor="middle" font-size="15">🔒</text>
+          <rect x="434" y="154" width="100" height="38" rx="5" fill="#EAF3F9"></rect>
+          <rect x="542" y="154" width="100" height="38" rx="5" fill="#4E84B4"></rect>
+        </svg>
+        <figcaption>① 아무것도 안 잠금 → ② 가운데 색이 마음에 들어 잠금 → ③ 첫 색도 잠금.
+          <strong>잠근 색은 그대로 남고 나머지만 새로 바뀝니다.</strong></figcaption>
+      </figure>
+
+      <h3>색 번호가 뭔가요</h3>
+      <div class="card">
+        <dl class="defs">
+          <div class="def">
+            <dt><code>#AFCDE9</code><span class="eq">= 색의 주민번호</span></dt>
+            <dd>앞에서부터 두 자씩 <strong>빨강 · 초록 · 파랑</strong>이 얼마나 섞였는지를 적은 것입니다.
+              이 여섯 글자만 있으면 한글이든 파워포인트든 <strong>어디서나 똑같은 색</strong>이 나옵니다.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <h3>아무 색이나 뽑지 않습니다</h3>
+      <p>무작위로 뽑으면 어울리지 않는 조합이 나옵니다. 그래서 <strong>네 가지 방식</strong> 중 하나를 골라 규칙대로 뽑습니다. 지금 어떤 방식으로 뽑았는지는 화면 위쪽에 나옵니다.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>방식</th><th>느낌</th><th>어울리는 곳</th></tr></thead>
+          <tbody>
+            <tr><td>비슷한 색끼리</td><td>차분하고 안정적</td><td>보고서 · 안내문</td></tr>
+            <tr><td>한 가지 색의 농담</td><td>깔끔하고 정돈됨</td><td>표 · 그래프</td></tr>
+            <tr><td>반대색 섞기</td><td>눈에 확 띔</td><td>포스터 · 강조</td></tr>
+            <tr><td>삼각 배색</td><td>활기차고 밝음</td><td>초대장 · 행사</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>어느 때 쓰는가</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>쓸 곳</th><th>어떻게</th></tr></thead>
+          <tbody>
+            <tr><td>한글 · 워드</td><td>표 머리글 색, 제목 글자색 — 글자색 → 다른 색 → 색 번호 칸에 붙여넣기</td></tr>
+            <tr><td>파워포인트</td><td>장표마다 색이 제각각이면 산만합니다. 5개만 정해 두고 반복해서 씁니다.</td></tr>
+            <tr><td>엑셀</td><td>항목별 색 구분. ‘한 가지 색의 농담’ 방식이 잘 맞습니다.</td></tr>
+            <tr><td>저에게 시킬 때</td><td><strong>가장 쓸모 있습니다.</strong> 말로 하면 서로 다른 색을 떠올립니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="say" style="margin-top:20px;">
+        <span class="tag">말이 아니라 번호로</span>
+        <q>“파란색으로 해줘” 하면 어떤 파랑인지 모릅니다. “#AFCDE9 로 해줘” 하면 정확히 그 색입니다.</q>
+      </div>
+
+      <h3>색을 고를 때의 규칙</h3>
+      <p>QR코드에서 배운 것과 같은 원리입니다. <strong>글자와 바탕의 밝기 차이</strong>가 충분해야 읽힙니다.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>쓸 곳</th><th>고를 색</th><th>왜</th></tr></thead>
+          <tbody>
+            <tr><td>글자용</td><td>진한 색 (왼쪽 칸)</td><td>흰 종이 위에서 또렷하게 보임</td></tr>
+            <tr><td>배경용</td><td>연한 색 (오른쪽 칸)</td><td>글자를 얹어도 읽힘</td></tr>
+            <tr><td>강조용</td><td>딱 한 개만</td><td>다 강조하면 강조가 아닙니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="warn">
+        <b>이 학습장이 바로 그 예입니다</b> — 지금 보고 계신 종이색 <code>#AFCDE9</code> 는 팔레트에서 고른 색입니다.
+        그런데 종이만 바꾸니 회색 설명글이 흐려져서, <strong>글자색도 함께 진하게 맞췄습니다.</strong>
+        배경을 바꿀 때는 글자색도 같이 봐야 합니다.
+      </div>
+
+      <div class="say" style="margin-top:24px;">
+        <span class="tag">이렇게 말했습니다</span>
+        <q>스페이스바를 누르면 색 5개가 새로 바뀌고, 마음에 드는 색은 자물쇠로 고정하고, 클릭하면 색 번호가 복사되는 페이지를 만들어줘.</q>
+      </div>
+    </section>
+
+    <!-- 6과 -->
+    <section id="l6">
+      <div class="lesson"><span class="no">6과</span></div>
+      <h2>PDF 생성기</h2>
+      <p class="sub">글을 넣으면 버튼 하나로 PDF 문서가 만들어집니다. <strong>한글이 절대 깨지지 않게</strong> 만들었습니다.</p>
+
+      <h3>쓰는 순서</h3>
+      <div class="card">
+        <ol class="steps">
+          <li><div><b>제목을 넣는다</b><span>이 제목이 그대로 파일 이름이 됩니다. → <code>2026년 가을 모임 안내.pdf</code></span></div></li>
+          <li><div><b>내용을 쓴다</b><span>오른쪽 종이에 즉시 나타납니다. 보이는 그대로 저장됩니다.</span></div></li>
+          <li><div><b>글자 크기와 글꼴을 고른다</b><span>작게 13pt · 보통 15pt · 크게 18pt &nbsp;|&nbsp; 고딕 · 명조</span></div></li>
+          <li><div><b>저장 버튼을 누른다</b><span>‘다운로드’ 폴더에 PDF가 생깁니다.</span></div></li>
+        </ol>
+      </div>
+
+      <h3>저장 버튼이 두 개인 이유</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>버튼</th><th>한글</th><th>글자 복사</th><th>언제 쓰나</th></tr></thead>
+          <tbody>
+            <tr><td>PDF로 저장</td><td>안 깨짐</td><td>안 됨</td><td><strong>거의 항상 이것</strong> — 버튼 한 번이면 끝</td></tr>
+            <tr><td>인쇄로 저장</td><td>안 깨짐</td><td>됩니다</td><td>받는 사람이 글을 복사해야 할 때</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>‘인쇄로 저장’은 창이 하나 뜹니다. 거기서 프린터 대신 <strong>“PDF로 저장”</strong>을 고르고 저장을 누르세요.</p>
+
+      <h3>한글이 깨지지 않는 이유</h3>
+      <figure>
+        <svg class="diagram" viewBox="0 0 660 130" role="img" aria-label="내 컴퓨터의 한글 글꼴로 A4 한 장을 그림으로 그린 뒤 그 그림을 PDF에 넣어, 어디서 열어도 글자가 그대로 나오는 과정">
+          <rect class="d-box" x="14" y="40" width="132" height="58" rx="9"></rect>
+          <text class="d-t" x="80" y="66" text-anchor="middle">내 컴퓨터 글꼴</text>
+          <text class="d-s" x="80" y="87" text-anchor="middle">맑은 고딕 · 바탕</text>
+
+          <rect class="d-box-2" x="196" y="40" width="148" height="58" rx="9"></rect>
+          <text class="d-t" x="270" y="66" text-anchor="middle">A4 한 장을</text>
+          <text class="d-t" x="270" y="87" text-anchor="middle">그림으로 그림</text>
+
+          <rect class="d-box" x="394" y="40" width="112" height="58" rx="9"></rect>
+          <text class="d-t" x="450" y="66" text-anchor="middle">PDF에 넣기</text>
+          <text class="d-s" x="450" y="87" text-anchor="middle">쪽마다 한 장</text>
+
+          <rect class="d-box" x="556" y="40" width="92" height="58" rx="9"></rect>
+          <text class="d-t" x="602" y="66" text-anchor="middle">어디서든</text>
+          <text class="d-t" x="602" y="87" text-anchor="middle">그대로</text>
+
+          <path class="d-line" d="M154 69 H188" marker-end="url(#ar2)"></path>
+          <path class="d-line" d="M352 69 H386" marker-end="url(#ar2)"></path>
+          <path class="d-line" d="M514 69 H548" marker-end="url(#ar2)"></path>
+          <text class="d-l" x="270" y="26" text-anchor="middle">여기가 핵심</text>
+        </svg>
+        <figcaption>글자를 ‘글꼴’이 아니라 ‘그림’으로 넣기 때문에, 받는 사람 컴퓨터에 한글 글꼴이 없어도 그대로 보입니다.</figcaption>
+      </figure>
+
+      <div class="card">
+        <dl class="defs">
+          <div class="def">
+            <dt>왜 글꼴을 안 넣었나<span class="eq">= 파일이 너무 큽니다</span></dt>
+            <dd>한글은 글자가 <strong>11,172자</strong>나 되어서 글꼴 파일 하나가 <strong>5~16MB</strong>입니다. PDF마다 이걸 넣으면 파일이 무거워지고, 앱을 열 때마다 한참 기다려야 합니다.</dd>
+          </div>
+          <div class="def">
+            <dt>대신 쓴 방법<span class="eq">= 종이를 그림으로 그린다</span></dt>
+            <dd>내 컴퓨터에 이미 있는 한글 글꼴로 <strong>A4 한 장을 통째로 그린 뒤</strong> 그 그림을 PDF에 넣습니다. 깨질 일이 <strong>원천적으로 없습니다.</strong></dd>
+          </div>
+        </dl>
+      </div>
+
+      <h3>알아서 해주는 것</h3>
+      <div class="tablewrap">
+        <table>
+          <tbody>
+            <tr><td>여러 쪽</td><td>길게 쓰면 다음 쪽으로 자동으로 넘어갑니다. ◀ ▶ 로 미리 넘겨볼 수 있습니다.</td></tr>
+            <tr><td>쪽 번호</td><td>2쪽이 넘으면 아래 가운데에 <code>1 / 3</code> 이 자동으로 붙습니다.</td></tr>
+            <tr><td>줄 바꿈</td><td>Enter를 누른 곳에서 줄이 바뀌고, 빈 줄도 그대로 남습니다.</td></tr>
+            <tr><td>자동 기억</td><td>쓰던 글이 그대로 남습니다. 창을 닫아도 안 사라집니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>만든 PDF를 카톡으로 보내기</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>어디서</th><th>순서</th></tr></thead>
+          <tbody>
+            <tr><td>컴퓨터 카톡</td><td>대화방을 연다 → 탐색기에서 PDF 파일을 대화창으로 <strong>끌어다 놓는다</strong> → 확인</td></tr>
+            <tr><td>휴대폰 카톡</td><td>대화방 → 왼쪽 아래 <strong>[+]</strong> → 파일 → 만든 PDF 고르기</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="warn">
+        <b>보낸 파일은 영원하지 않습니다</b> — 카톡으로 보낸 파일은 보통 <strong>일주일 뒤 다운로드가 안 됩니다.</strong>
+        지인에게 “받으면 바로 저장하세요” 한마디를 덧붙이세요.
+      </div>
+
+      <div class="say" style="margin-top:24px;">
+        <span class="tag">이렇게 말했습니다</span>
+        <q>글을 입력하면 저장 버튼 하나로 PDF가 만들어지는 페이지를 만들어줘. 한글 폰트 꼭 넣어줘.</q>
+      </div>
+    </section>
+
+    <!-- 7과 -->
+    <section id="l7">
+      <div class="lesson"><span class="no">7과</span></div>
+      <h2>지금까지 만든 것</h2>
+      <p class="sub">각각 index.html 파일 하나입니다. 바탕화면에 바로가기를 만들어 두면 편합니다.</p>
+
+      <h3>나이계산기</h3>
+      <p>생년월일을 한 번 넣으면 컴퓨터가 기억합니다. 다음에 열면 그대로 나옵니다.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>보여주는 것</th><th>설명</th></tr></thead>
+          <tbody>
+            <tr><td>만 나이</td><td>법에서 쓰는 진짜 나이</td></tr>
+            <tr><td>세는 나이</td><td>태어나면 1살, 해가 바뀌면 +1 (옛날 방식)</td></tr>
+            <tr><td>산 날</td><td>태어나서 오늘까지 며칠, 몇 시간인지</td></tr>
+            <tr><td>다음 생일</td><td>며칠 남았는지, 그날이 무슨 요일인지</td></tr>
+            <tr><td>다음 기념일</td><td>다음 1,000일 단위가 언제 오는지</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>디데이계산기</h3>
+      <p>기다리는 날을 <strong>몇 개든</strong> 넣을 수 있습니다. 넣는 방법은 두 가지입니다.</p>
+      <div class="card stack">
+        <ol class="steps">
+          <li><div><b>내가 기다리는 날 넣기</b><span>그림 고르기 → 이름 적기 → 날짜 고르기 → 파란 버튼. 여행, 결혼식, 병원, 적금 만기 무엇이든.</span></div></li>
+          <li><div><b>자주 찾는 날 눌러 담기</b><span>선거처럼 날짜 찾기 귀찮은 것은 동그란 버튼 한 번으로 끝납니다.</span></div></li>
+        </ol>
+      </div>
+
+      <h3>미리 담아 둔 선거일</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>선거</th><th>날짜</th><th>2026년 8월 31일 기준</th></tr></thead>
+          <tbody>
+            <tr><td>제23대 국회의원 선거</td><td>2028년 4월 12일 (수)</td><td><span class="mono">D-590</span> · 약 1년 7개월</td></tr>
+            <tr><td>제22대 대통령 선거</td><td>2030년 3월 27일 (수)</td><td><span class="mono">D-1,304</span> · 약 3년 6개월</td></tr>
+            <tr><td>제10회 지방선거</td><td>2030년 6월 12일 (수)</td><td><span class="mono">D-1,381</span> · 약 3년 9개월</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>기호와 색 읽는 법</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>표시</th><th>뜻</th></tr></thead>
+          <tbody>
+            <tr><td><span class="mono">D-100</span></td><td>100일 <strong>남았다</strong></td></tr>
+            <tr><td><span class="mono">D-DAY</span></td><td><strong>바로 오늘</strong>이다 — 노란 칸으로 바뀝니다</td></tr>
+            <tr><td><span class="mono">D+100</span></td><td>100일 <strong>지났다</strong> — 흐려지며 아래로 내려갑니다</td></tr>
+            <tr><td>분홍 칸</td><td>30일 안쪽 — 이제 곧입니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>QR코드생성기</h3>
+      <p>글자를 흑백 무늬로 바꿉니다. 자세한 내용은 <strong>4과</strong>에 있습니다. 이 폴더에는 파일이 셋 들어 있습니다.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>파일</th><th>무엇</th></tr></thead>
+          <tbody>
+            <tr><td>index.html</td><td>앱 — 더블클릭하면 열립니다</td></tr>
+            <tr><td>QR코드생성기-사용설명서.pdf</td><td>4쪽짜리 설명서 — 인쇄해서 옆에 두고 보세요</td></tr>
+            <tr><td>설명서.html</td><td>설명서 원고 — 내용을 고쳐 다시 구울 때만 씁니다</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>색상팔레트</h3>
+      <p>어울리는 색 5개를 뽑아 줍니다. 자세한 내용은 <strong>5과</strong>에 있습니다. 잠근 색까지 그대로 기억합니다.</p>
+
+      <h3>PDF생성기</h3>
+      <p>글을 넣으면 PDF 문서를 만들어 줍니다. 자세한 내용은 <strong>6과</strong>에 있습니다.</p>
+
+      <h3>여섯 개를 한눈에</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>폴더</th><th>하는 일</th><th>인터넷</th><th>배운 것</th></tr></thead>
+          <tbody>
+            <tr><td>나이계산기</td><td>만 나이 · 산 날 수 · 다음 생일</td><td>필요 없음</td><td>뺄셈 하나면 되는 앱</td></tr>
+            <tr><td>디데이계산기</td><td>기다리는 날까지 며칠</td><td>필요 없음</td><td>목록을 기억시키기</td></tr>
+            <tr><td>QR코드생성기</td><td>글자 → 흑백 무늬</td><td><strong>필요함</strong></td><td>부품 빌려 쓰기</td></tr>
+            <tr><td>색상팔레트</td><td>어울리는 색 5개 뽑기</td><td>필요 없음</td><td>색 고르는 규칙</td></tr>
+            <tr><td>PDF생성기</td><td>글 → PDF 문서</td><td><strong>필요함</strong></td><td>한글 안 깨지게 하기</td></tr>
+            <tr><td>안내서</td><td>이 학습장</td><td>필요 없음</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5과 -->
+    <section id="l8">
+      <div class="lesson"><span class="no">8과</span></div>
+      <h2>git 과 GitHub</h2>
+      <p class="sub">둘은 다른 물건이 아닙니다. 같은 앨범이 두 군데 있는 것입니다.</p>
+
+      <div class="card">
+        <dl class="defs">
+          <div class="def">
+            <dt>git<span class="eq">= 내 컴퓨터의 타임머신 사진첩</span></dt>
+            <dd>폴더를 고칠 때마다 그 순간을 사진으로 남겨 둡니다. 오늘 망가뜨려도 <strong>어제 사진으로 되돌리면 그만</strong>입니다. 이 사진첩은 내 컴퓨터 안에만 있습니다.</dd>
+          </div>
+          <div class="def">
+            <dt>GitHub<span class="eq">= 인터넷 금고</span></dt>
+            <dd>그 사진첩을 한 부 더 맡겨 두는 곳입니다. 컴퓨터가 고장 나도 안전하고, 남에게 링크로 보여줄 수 있습니다.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <figure>
+        <svg class="diagram" viewBox="0 0 660 240" role="img" aria-label="내 컴퓨터에서 commit으로 저장하고, push로 GitHub에 올리고, pull로 내려받는 그림">
+          <rect class="d-box" x="34" y="66" width="212" height="94" rx="10"></rect>
+          <text class="d-t" x="140" y="104" text-anchor="middle">내 컴퓨터</text>
+          <text class="d-s" x="140" y="128" text-anchor="middle">git · 타임머신 사진첩</text>
+
+          <rect class="d-box-2" x="414" y="66" width="212" height="94" rx="10"></rect>
+          <text class="d-t" x="520" y="104" text-anchor="middle">GitHub</text>
+          <text class="d-s" x="520" y="128" text-anchor="middle">인터넷 금고</text>
+
+          <path class="d-line" d="M254 96 H406" marker-end="url(#ar)"></path>
+          <text class="d-l" x="330" y="86" text-anchor="middle">push</text>
+          <text class="d-s" x="330" y="60" text-anchor="middle">올려 맡기기</text>
+
+          <path class="d-line" d="M406 132 H254" marker-end="url(#ar)"></path>
+          <text class="d-l" x="330" y="152" text-anchor="middle">pull</text>
+          <text class="d-s" x="330" y="176" text-anchor="middle">꺼내 오기</text>
+
+          <path class="d-line" d="M92 178 a34 34 0 1 0 34 -34" marker-end="url(#ar)"></path>
+          <text class="d-l" x="86" y="222" text-anchor="middle">commit</text>
+          <text class="d-s" x="176" y="222" text-anchor="middle">사진 찰칵</text>
+
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="currentColor" style="fill:var(--red)"></path>
+            </marker>
+          </defs>
+        </svg>
+        <figcaption>순서는 언제나 <strong>찰칵(commit) → 맡기기(push)</strong> 입니다. 사진을 찍어야 맡길 수 있으니까요.</figcaption>
+      </figure>
+
+      <h3>외울 단어는 셋뿐</h3>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>단어</th><th>하는 일</th><th>비유</th></tr></thead>
+          <tbody>
+            <tr><td>commit</td><td>내 컴퓨터에 저장</td><td>사진 찰칵</td></tr>
+            <tr><td>push</td><td>GitHub로 올리기</td><td>금고에 맡김</td></tr>
+            <tr><td>pull</td><td>GitHub에서 내려받기</td><td>금고에서 꺼냄</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>git이 하는 말 읽기</h3>
+      <pre><code>?? 나이계산기/     ← 처음 보는 물건입니다. 사진 찍을까요?
+ M SKILL.md        ← 고쳐졌습니다 (Modified)</code></pre>
+
+      <h3>올리면 생기는 일</h3>
+      <p>GitHub에는 <strong>GitHub Pages</strong>라는 기능이 있어서, 올린 <code>index.html</code>에 진짜 인터넷 주소가 붙습니다. 그러면 <strong>휴대폰으로도 열리고, 자녀분께 링크만 보내도 볼 수 있습니다.</strong></p>
+      <pre><code>https://kimsunghwan888.github.io/gongjangjang2/나이계산기/</code></pre>
+    </section>
+
+    <!-- 6과 -->
+    <section id="l9">
+      <div class="lesson"><span class="no">9과</span></div>
+      <h2>막힐 때 쓰는 말</h2>
+      <p class="sub">고치는 법을 알 필요는 없습니다. 증상만 말하면 됩니다.</p>
+
+      <div class="stack">
+        <div class="say"><span class="tag">화면이 이상할 때</span><q>화면에 아무것도 안 나와.</q></div>
+        <div class="say"><span class="tag">글씨가 작을 때</span><q>글자를 더 크게, 버튼도 더 크게 해줘.</q></div>
+        <div class="say"><span class="tag">뭘 할지 모를 때</span><q>지금 뭘 눌러야 하는지 알려줘.</q></div>
+        <div class="say"><span class="tag">되돌리고 싶을 때</span><q>방금 고친 거 원래대로 돌려줘.</q></div>
+      </div>
+
+      <h3>안심하셔도 되는 것</h3>
+      <div class="tablewrap">
+        <table>
+          <tbody>
+            <tr><td>개인정보</td><td>넣은 생년월일과 날짜는 <strong>이 컴퓨터 안에만</strong> 있습니다. 어디로도 보내지 않습니다.</td></tr>
+            <tr><td>개수 제한</td><td>없습니다. D-day를 50개 넣어도 됩니다.</td></tr>
+            <tr><td>망가뜨릴 걱정</td><td>git으로 사진을 찍어 두면 언제든 되돌릴 수 있습니다.</td></tr>
+            <tr><td>비용</td><td>앱을 여는 데는 아무 돈도 들지 않습니다. 인터넷도 필요 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>다음에 할 일</h3>
+      <div class="card">
+        <ol class="steps">
+          <li><div><b>만든 앱 다섯 개를 git에 저장하고 GitHub에 올리기</b><span>사진 찰칵 → 금고에 맡기기. 그래야 휴대폰에서 열리고, 지인에게 링크로 보낼 수 있습니다.</span></div></li>
+          <li><div><b>남은 하나 만들기</b><span>짤(밈) 메이커. 3과의 문장을 그대로 붙여넣으면 됩니다.</span></div></li>
+          <li><div><b>다 만들면 React로 한 집에 모으기</b><span>“이것들을 한 앱으로 합쳐줘” 한마디면 됩니다.</span></div></li>
+        </ol>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>앱 만들기 학습장 · 버전 1.3</span>
+    <span>2026-08-31</span>
+  </footer>
+
+</div>

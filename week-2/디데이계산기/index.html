@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D-day 계산기</title>
+<style>
+  :root{
+    --bg:#F4F8FB; --card:#FFFFFF; --ink:#12222E; --sub:#5F7386;
+    --blue:#1864AB; --blue-soft:#E3EFF9; --line:#D6E2EC;
+    --red:#C92A2A; --red-soft:#FFF0F0; --gray:#9AAAB7;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:24px 16px 60px;
+    background:var(--bg); color:var(--ink);
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    font-size:20px; line-height:1.6;
+  }
+  .wrap{max-width:780px; margin:0 auto;}
+  h1{font-size:36px; margin:0 0 4px; letter-spacing:-1.5px;}
+  h2{font-size:24px; margin:34px 0 14px; letter-spacing:-1px; color:var(--sub);}
+  .lead{color:var(--sub); font-size:18px; margin:0 0 6px;}
+  .todayline{
+    font-size:18px; color:var(--blue); font-weight:700; margin:0 0 26px;
+  }
+
+  .box{
+    background:var(--card); border:2px solid var(--line);
+    border-radius:20px; padding:24px; margin-bottom:22px;
+  }
+  label{display:block; font-size:21px; font-weight:800; margin-bottom:12px;}
+  input[type=text], input[type=date]{
+    width:100%; font-size:26px; padding:14px;
+    border:3px solid var(--line); border-radius:14px;
+    font-family:inherit; background:#fff; color:var(--ink);
+  }
+  input:focus{border-color:var(--blue); outline:none;}
+  .hint{font-size:16px; color:var(--sub); margin:10px 0 0;}
+
+  .row{display:grid; gap:12px; margin-bottom:12px;}
+  @media(min-width:640px){ .row{grid-template-columns:1.5fr 1fr;} }
+
+  button{
+    font-family:inherit; font-size:22px; font-weight:800;
+    padding:16px; border:0; border-radius:14px;
+    background:var(--blue); color:#fff; cursor:pointer; width:100%;
+  }
+  button:hover{background:#12508A;}
+
+  .chips{display:flex; flex-wrap:wrap; gap:10px; margin-top:4px;}
+  .chip{
+    width:auto; font-size:18px; font-weight:700; padding:12px 16px;
+    background:var(--blue-soft); color:var(--blue); border:2px solid #B9D5EC;
+    border-radius:999px; white-space:nowrap;
+  }
+  .chip:hover{background:#CFE3F5;}
+  .chip.on{background:var(--blue); color:#fff; border-color:var(--blue);}
+  #emojis{margin-bottom:16px;}
+  #emojis .chip{font-size:26px; padding:8px 14px;}
+
+  .ev{
+    background:var(--card); border:2px solid var(--line); border-radius:20px;
+    padding:20px 22px; margin-bottom:14px;
+    display:flex; align-items:center; gap:18px;
+  }
+  .ev .info{flex:1; min-width:0;}
+  .ev .name{font-size:24px; font-weight:800; word-break:keep-all; line-height:1.3;}
+  .ev .when{font-size:16px; color:var(--sub); margin-top:4px;}
+  .ev .dd{
+    font-size:44px; font-weight:800; color:var(--blue);
+    letter-spacing:-2.5px; white-space:nowrap; text-align:right;
+  }
+  .ev .sub{display:block; font-size:15px; font-weight:700; color:var(--sub); letter-spacing:0;}
+  .ev .del{
+    width:auto; padding:11px 15px; font-size:16px; font-weight:700;
+    background:#EDF2F6; color:var(--sub); flex:none;
+  }
+  .ev .del:hover{background:#DDE6ED; color:var(--red);}
+
+  .ev.soon{background:var(--red-soft); border-color:#F2C2C2;}
+  .ev.soon .dd{color:var(--red);}
+  .ev.today{background:#FFF9DB; border-color:#F2E08A;}
+  .ev.today .dd{color:#B8860B;}
+  .ev.past{opacity:.5;}
+  .ev.past .dd{color:var(--gray);}
+
+  .empty{
+    text-align:center; color:var(--sub); font-size:19px;
+    padding:34px 20px; background:var(--card);
+    border:2px dashed var(--line); border-radius:20px;
+  }
+  footer{margin-top:38px; font-size:16px; color:var(--sub); text-align:center; line-height:2;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>D-day 계산기</h1>
+  <p class="lead">기다리는 날까지 며칠 남았는지 세어 드립니다.</p>
+  <p class="todayline" id="todayLine"></p>
+
+  <div class="box">
+    <label for="evName">① 내가 기다리는 날 넣기</label>
+    <div class="chips" id="emojis"></div>
+    <div class="row">
+      <input type="text" id="evName" placeholder="예: 아들 결혼식" maxlength="30">
+      <input type="date" id="evDate">
+    </div>
+    <button id="addBtn">＋ 목록에 담기</button>
+    <p class="hint">그림 고르기 → 이름 적기 → 날짜 고르기 → 파란 버튼 누르기<br>
+      그림은 안 골라도 됩니다. 몇 개든 넣을 수 있습니다.</p>
+  </div>
+
+  <div class="box">
+    <label>② 자주 찾는 날 — 눌러서 바로 담기</label>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <h2 id="upTitle">⏳ 다가오는 날</h2>
+  <div id="upList"></div>
+
+  <div id="pastWrap" hidden>
+    <h2>✔ 지나간 날</h2>
+    <div id="pastList"></div>
+  </div>
+
+  <footer>
+    <b>D-100</b> 100일 남음 &nbsp;·&nbsp; <b>D-DAY</b> 바로 오늘 &nbsp;·&nbsp; <b>D+100</b> 100일 지남<br>
+    담아둔 날은 이 컴퓨터가 기억합니다. 다음에 열면 그대로 있습니다.
+  </footer>
+
+</div>
+
+<script>
+  var DAY = 24 * 60 * 60 * 1000;
+  var WEEKDAY = ['일','월','화','수','목','금','토'];
+  var KEY = 'ddayEvents';
+
+  /* 자주 찾는 날 (버튼으로 바로 담을 수 있는 것들) */
+  var PRESETS = [
+    { emoji:'🗳', name:'제23대 국회의원 선거',     date:'2028-04-12' },
+    { emoji:'🗳', name:'제22대 대통령 선거',       date:'2030-03-27' },
+    { emoji:'🗳', name:'제10회 전국동시지방선거', date:'2030-06-12' },
+    { emoji:'🎊', name:'새해 첫날',               date:'2027-01-01' }
+  ];
+
+  /* 처음 열면 선거 3개가 담겨 있습니다 */
+  var DEFAULTS = [
+    { name:'🗳 제23대 국회의원 선거',     date:'2028-04-12' },
+    { name:'🗳 제22대 대통령 선거',       date:'2030-03-27' },
+    { name:'🗳 제10회 전국동시지방선거', date:'2030-06-12' }
+  ];
+
+  var evName  = document.getElementById('evName');
+  var evDate  = document.getElementById('evDate');
+  var addBtn  = document.getElementById('addBtn');
+  var chipBox = document.getElementById('chips');
+  var emojiBox= document.getElementById('emojis');
+  var upList  = document.getElementById('upList');
+  var pastList= document.getElementById('pastList');
+  var pastWrap= document.getElementById('pastWrap');
+
+  /* ---------- 도구 ---------- */
+  function today0(){
+    var n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+  function toDate(s){
+    var p = s.split('-');
+    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  }
+  function comma(n){
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function esc(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmt(d){
+    return d.getFullYear() + '년 ' + (d.getMonth()+1) + '월 ' +
+           d.getDate() + '일 (' + WEEKDAY[d.getDay()] + '요일)';
+  }
+  function human(days){
+    var n = Math.abs(days);
+    if (n < 30) { return n + '일'; }
+    var y = Math.floor(n / 365);
+    var m = Math.floor((n % 365) / 30);
+    if (y === 0) { return '약 ' + m + '개월'; }
+    if (m === 0) { return '약 ' + y + '년'; }
+    return '약 ' + y + '년 ' + m + '개월';
+  }
+  function load(){
+    try {
+      var v = localStorage.getItem(KEY);
+      return v ? JSON.parse(v) : null;
+    } catch (e) { return null; }
+  }
+  function save(){
+    try { localStorage.setItem(KEY, JSON.stringify(events)); } catch (e) {}
+  }
+
+  /* ---------- 자료 ---------- */
+  var events = load();
+  if (events === null) { events = DEFAULTS.slice(); save(); }
+
+  document.getElementById('todayLine').textContent = '오늘은 ' + fmt(today0()) + '입니다';
+
+  /* ---------- 자주 찾는 날 버튼 ---------- */
+  chipBox.innerHTML = PRESETS.map(function (p, i) {
+    return '<button class="chip" data-p="' + i + '">' +
+             p.emoji + ' ' + esc(p.name) +
+           '</button>';
+  }).join('');
+
+  chipBox.addEventListener('click', function (e) {
+    var btn = e.target.closest('.chip');
+    if (!btn) { return; }
+    var p = PRESETS[Number(btn.getAttribute('data-p'))];
+    add(p.emoji + ' ' + p.name, p.date);
+  });
+
+  /* ---------- 그림(이모지) 고르기 ---------- */
+  var EMOJIS = ['🎂','💒','✈️','🏥','🎊','💰','🚗','🏠','🍽','⛰'];
+  var chosen = '';
+
+  emojiBox.innerHTML = EMOJIS.map(function (e) {
+    return '<button class="chip" data-e="' + e + '">' + e + '</button>';
+  }).join('');
+
+  emojiBox.addEventListener('click', function (e) {
+    var btn = e.target.closest('.chip');
+    if (!btn) { return; }
+    var val = btn.getAttribute('data-e');
+    chosen = (chosen === val) ? '' : val;   // 한 번 더 누르면 해제
+    markChosen();
+    evName.focus();
+  });
+
+  function markChosen() {
+    [].forEach.call(emojiBox.children, function (c) {
+      if (c.getAttribute('data-e') === chosen && chosen !== '') { c.classList.add('on'); }
+      else { c.classList.remove('on'); }
+    });
+  }
+
+  /* ---------- 직접 넣기 ---------- */
+  addBtn.addEventListener('click', function () {
+    var typed = evName.value.trim();
+    var date  = evDate.value;
+    if (!typed) { alert('무슨 날인지 이름을 적어 주세요.'); evName.focus(); return; }
+    if (!date)  { alert('날짜를 골라 주세요.'); evDate.focus(); return; }
+    var name = chosen ? (chosen + ' ' + typed) : typed;
+    if (add(name, date)) {
+      evName.value = '';
+      evDate.value = '';
+      chosen = '';
+      markChosen();
+      evName.focus();
+    }
+  });
+  evName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { addBtn.click(); } });
+  evDate.addEventListener('keydown', function (e) { if (e.key === 'Enter') { addBtn.click(); } });
+
+  function add(name, date) {
+    var dup = events.some(function (v) { return v.name === name && v.date === date; });
+    if (dup) { alert('「' + name + '」은(는) 이미 목록에 있습니다.'); return false; }
+    events.push({ name: name, date: date });
+    save();
+    render();
+    return true;
+  }
+
+  /* ---------- 지우기 ---------- */
+  function hookDelete(box) {
+    box.addEventListener('click', function (e) {
+      var btn = e.target.closest('.del');
+      if (!btn) { return; }
+      var i = Number(btn.getAttribute('data-i'));
+      if (confirm('「' + events[i].name + '」을(를) 목록에서 지울까요?')) {
+        events.splice(i, 1);
+        save();
+        render();
+      }
+    });
+  }
+  hookDelete(upList);
+  hookDelete(pastList);
+
+  /* ---------- 그리기 ---------- */
+  function render() {
+    var today = today0();
+    var rows = events.map(function (ev, i) {
+      var d = toDate(ev.date);
+      return { ev: ev, i: i, d: d, left: Math.round((d - today) / DAY) };
+    });
+
+    var up   = rows.filter(function (r) { return r.left >= 0; })
+                   .sort(function (a, b) { return a.left - b.left; });
+    var past = rows.filter(function (r) { return r.left < 0; })
+                   .sort(function (a, b) { return b.left - a.left; });
+
+    upList.innerHTML = up.length
+      ? up.map(item).join('')
+      : '<div class="empty">담아둔 날이 없습니다.<br>위에서 하나 눌러 담아 보세요.</div>';
+
+    pastWrap.hidden = (past.length === 0);
+    pastList.innerHTML = past.map(item).join('');
+  }
+
+  function item(r) {
+    var cls = 'ev', dd, sub;
+    if (r.left === 0) {
+      cls += ' today'; dd = 'D-DAY'; sub = '바로 오늘입니다 🎉';
+    } else if (r.left > 0) {
+      dd = 'D-' + comma(r.left);
+      sub = human(r.left) + ' 남음';
+      if (r.left <= 30) { cls += ' soon'; }
+    } else {
+      cls += ' past';
+      dd = 'D+' + comma(-r.left);
+      sub = human(r.left) + ' 지남';
+    }
+
+    return '<div class="' + cls + '">' +
+      '<div class="info">' +
+        '<div class="name">' + esc(r.ev.name) + '</div>' +
+        '<div class="when">' + fmt(r.d) + '</div>' +
+      '</div>' +
+      '<div class="dd">' + dd + '<span class="sub">' + sub + '</span></div>' +
+      '<button class="del" data-i="' + r.i + '">지우기</button>' +
+    '</div>';
+  }
+
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR코드 만들기</title>
+
+<!-- ① 부품 빌려오기 : 인터넷 창고(cdnjs)에서 QR 계산기를 가져옵니다 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- ② PDF 만드는 부품도 같은 창고에서 빌려옵니다 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg:#F5F5F2; --card:#FFFFFF; --ink:#1C1C1A; --sub:#6B6B64;
+    --line:#DEDED8; --green:#2F6F4E; --green-soft:#E8F2EC;
+    --red:#B3261E; --red-soft:#FDF1F0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:26px 16px 60px;
+    background:var(--bg); color:var(--ink);
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    font-size:20px; line-height:1.7; word-break:keep-all;
+  }
+  .wrap{max-width:640px; margin:0 auto;}
+
+  h1{font-size:36px; margin:0 0 4px; letter-spacing:-1.5px;}
+  .lead{color:var(--sub); font-size:18px; margin:0 0 26px;}
+
+  .box{
+    background:var(--card); border:2px solid var(--line);
+    border-radius:20px; padding:24px; margin-bottom:20px;
+  }
+  label{display:block; font-size:21px; font-weight:800; margin-bottom:12px;}
+
+  textarea{
+    width:100%; min-height:110px; resize:vertical;
+    font-size:24px; padding:16px; line-height:1.5;
+    border:3px solid var(--line); border-radius:14px;
+    font-family:inherit; color:var(--ink); background:#fff;
+  }
+  textarea:focus{border-color:var(--green); outline:none;}
+  .count{font-size:15px; color:var(--sub); text-align:right; margin:8px 0 0;}
+  .hint{font-size:16px; color:var(--sub); margin:12px 0 0;}
+
+  /* 크기 고르기 */
+  .sizes{display:flex; gap:10px; margin-top:18px;}
+  .sizes button{flex:1;}
+  button{
+    font-family:inherit; font-size:20px; font-weight:800;
+    padding:15px 12px; border:2px solid var(--line); border-radius:14px;
+    background:#fff; color:var(--sub); cursor:pointer;
+  }
+  button:hover{border-color:var(--green); color:var(--green);}
+  button:focus-visible{outline:3px solid var(--green); outline-offset:2px;}
+  .sizes button.on{
+    background:var(--green); border-color:var(--green); color:#fff;
+  }
+
+  /* QR 나오는 자리 */
+  .stage{
+    background:#fff; border:2px solid var(--line); border-radius:20px;
+    padding:30px 20px; margin-bottom:20px;
+    display:grid; place-items:center; min-height:260px;
+  }
+  #qrBox{line-height:0;}
+  #qrBox img, #qrBox canvas{max-width:100%; height:auto; display:block;}
+  .stage .placeholder{
+    color:var(--sub); font-size:19px; text-align:center; line-height:1.8;
+  }
+  .stage .error{
+    color:var(--red); background:var(--red-soft);
+    border:2px solid #F0C9C6; border-radius:14px;
+    padding:18px 20px; font-size:18px; text-align:center; line-height:1.7;
+  }
+
+  /* 저장 · 인쇄 */
+  .actions{display:grid; gap:12px; grid-template-columns:1fr;}
+  @media(min-width:520px){ .actions{grid-template-columns:repeat(3,1fr);} }
+  .actions button{
+    padding:18px 8px; font-size:19px; white-space:nowrap;
+    background:var(--green); border-color:var(--green); color:#fff;
+  }
+  .actions button:hover{background:#245840; border-color:#245840; color:#fff;}
+  .actions button.ghost{
+    background:#fff; color:var(--green);
+  }
+  .actions button:disabled{
+    background:#EFEFEA; border-color:#EFEFEA; color:#AFAFA6; cursor:default;
+  }
+
+  .notice{
+    margin-top:26px; background:var(--green-soft);
+    border-left:5px solid var(--green); border-radius:0 14px 14px 0;
+    padding:16px 20px; font-size:17px; color:#2A4A3B;
+  }
+  .notice b{color:var(--green);}
+
+  footer{margin-top:30px; font-size:16px; color:var(--sub); text-align:center; line-height:1.9;}
+
+  /* 인쇄할 때는 QR코드만 나오게 */
+  @media print{
+    body{background:#fff; padding:0;}
+    .noprint{display:none !important;}
+    .stage{border:0; padding:0; min-height:0;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="noprint">QR코드 만들기</h1>
+  <p class="lead noprint">글자를 치면 바로 아래에 QR코드가 나타납니다.</p>
+
+  <div class="box noprint">
+    <label for="text">무엇을 QR코드로 만들까요?</label>
+    <textarea id="text" placeholder="예) https://www.naver.com&#10;예) 010-1234-5678&#10;예) 우리집 와이파이 비밀번호는 안내데스크에 문의하세요" maxlength="500"></textarea>
+    <p class="count"><span id="count">0</span> / 500 글자</p>
+
+    <div class="sizes">
+      <button type="button" data-size="200">작게</button>
+      <button type="button" data-size="320" class="on">보통</button>
+      <button type="button" data-size="500">크게</button>
+    </div>
+    <p class="hint">인쇄해서 벽에 붙이실 거면 <b>크게</b>를 고르세요.</p>
+  </div>
+
+  <div class="stage">
+    <div id="qrBox"></div>
+    <div class="placeholder" id="placeholder">
+      위 칸에 글자를 넣으면<br>여기에 QR코드가 나타납니다
+    </div>
+  </div>
+
+  <div class="actions noprint">
+    <button type="button" id="saveBtn" disabled>그림으로 저장</button>
+    <button type="button" id="pdfBtn" disabled>PDF로 저장</button>
+    <button type="button" id="printBtn" class="ghost" disabled>인쇄하기</button>
+  </div>
+
+  <div class="notice noprint">
+    <b>확인하는 법</b> — 휴대폰 카메라를 켜고 QR코드에 비추기만 하세요.
+    사진을 찍지 않아도 화면 위에 노란 알림이 뜹니다.<br><br>
+    <b>세 가지 저장</b> — <b>그림</b>은 카톡·문서에 붙일 때,
+    <b>PDF</b>는 인쇄소에 맡기거나 메일로 보낼 때, <b>인쇄</b>는 바로 프린터로 뽑을 때.
+  </div>
+
+  <footer class="noprint">
+    QR코드는 누구나 비추면 내용이 그대로 보입니다.<br>
+    비밀번호나 주민번호는 넣지 마세요.
+  </footer>
+
+</div>
+
+<script>
+  var textEl  = document.getElementById('text');
+  var countEl = document.getElementById('count');
+  var qrBox   = document.getElementById('qrBox');
+  var holder  = document.getElementById('placeholder');
+  var stage   = document.querySelector('.stage');
+  var saveBtn = document.getElementById('saveBtn');
+  var pdfBtn  = document.getElementById('pdfBtn');
+  var printBtn= document.getElementById('printBtn');
+  var sizeBtns= document.querySelectorAll('.sizes button');
+
+  var size = 320;
+  var timer = null;
+
+  /* 부품을 못 빌려온 경우 (인터넷이 끊겼을 때) */
+  if (typeof QRCode === 'undefined') {
+    showError('QR코드 부품을 가져오지 못했습니다.<br>' +
+              '인터넷 연결을 확인하고 <b>F5</b> 를 눌러 주세요.');
+    textEl.disabled = true;
+  } else {
+    textEl.addEventListener('input', onType);
+    sizeBtns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        sizeBtns.forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+        size = Number(b.getAttribute('data-size'));
+        draw();
+      });
+    });
+    saveBtn.addEventListener('click', save);
+    pdfBtn.addEventListener('click', savePdf);
+    printBtn.addEventListener('click', function () { window.print(); });
+  }
+
+  function onType() {
+    countEl.textContent = textEl.value.length;
+    clearTimeout(timer);
+    timer = setTimeout(draw, 150);   // 타이핑이 멈추면 그린다
+  }
+
+  /* ---------- QR코드 그리기 ---------- */
+  function draw() {
+    var value = textEl.value.trim();
+    qrBox.innerHTML = '';
+    clearError();
+
+    if (!value) {
+      holder.hidden = false;
+      setButtons(false);
+      return;
+    }
+    holder.hidden = true;
+
+    try {
+      new QRCode(qrBox, {
+        text: value,
+        width: size,
+        height: size,
+        colorDark: '#1A3E8C',   /* 진한 남색빛 파랑 — 흐리면 폰이 못 읽습니다 */
+        colorLight: '#FFFFFF',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+      setButtons(true);
+    } catch (e) {
+      qrBox.innerHTML = '';
+      setButtons(false);
+      showError('글자가 너무 깁니다.<br>조금 줄여서 다시 넣어 주세요.');
+    }
+  }
+
+  function setButtons(on) {
+    saveBtn.disabled = !on;
+    pdfBtn.disabled = !on;
+    printBtn.disabled = !on;
+  }
+
+  /* ---------- PDF로 저장 ----------
+     한글이 네모(□□□)로 깨지지 않도록, A4 종이 한 장을 그대로 그림으로
+     그린 뒤 그 그림을 PDF에 넣습니다. 그래서 화면과 똑같이 나옵니다. */
+  function savePdf() {
+    if (typeof jspdf === 'undefined') {
+      alert('PDF 부품을 가져오지 못했습니다.\n인터넷 연결을 확인하고 F5를 눌러 주세요.');
+      return;
+    }
+    var canvas = qrBox.querySelector('canvas');
+    if (!canvas) { alert('저장할 QR코드가 없습니다.'); return; }
+
+    var W = 1240, H = 1754;                  // A4 크기 (150dpi)
+    var page = document.createElement('canvas');
+    page.width = W; page.height = H;
+    var ctx = page.getContext('2d');
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, W, H);
+
+    var side = 740;                          // QR코드 한 변
+    var x = (W - side) / 2;
+    var y = 380;
+    ctx.imageSmoothingEnabled = false;       // 무늬가 뭉개지지 않게
+    ctx.drawImage(canvas, x, y, side, side);
+
+    ctx.fillStyle = '#111111';
+    ctx.textAlign = 'center';
+    ctx.font = '600 34px "Malgun Gothic","맑은 고딕",sans-serif';
+    wrapText(ctx, textEl.value.trim(), W / 2, y + side + 90, W - 240, 50, 3);
+
+    var doc = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    doc.addImage(page.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
+
+    var a = document.createElement('a');
+    a.href = doc.output('datauristring');
+    a.download = 'QR코드.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  /* 긴 글자를 여러 줄로 나눠 그립니다 */
+  function wrapText(ctx, text, cx, cy, maxWidth, lineHeight, maxLines) {
+    var lines = [], line = '';
+    for (var i = 0; i < text.length; i++) {
+      var test = line + text[i];
+      if (ctx.measureText(test).width > maxWidth && line !== '') {
+        lines.push(line);
+        line = text[i];
+        if (lines.length === maxLines) { break; }
+      } else {
+        line = test;
+      }
+    }
+    if (lines.length < maxLines && line !== '') { lines.push(line); }
+    if (lines.length === maxLines &&
+        lines.join('').length < text.length) {
+      lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + '…';
+    }
+    for (var j = 0; j < lines.length; j++) {
+      ctx.fillText(lines[j], cx, cy + j * lineHeight);
+    }
+  }
+
+  /* ---------- 그림으로 저장 ---------- */
+  function save() {
+    var canvas = qrBox.querySelector('canvas');
+    var img    = qrBox.querySelector('img');
+    var url = canvas ? canvas.toDataURL('image/png')
+                     : (img ? img.src : '');
+    if (!url) { alert('저장할 QR코드가 없습니다.'); return; }
+
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'QR코드.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  /* ---------- 안내 메시지 ---------- */
+  function showError(html) {
+    clearError();
+    holder.hidden = true;
+    var d = document.createElement('div');
+    d.className = 'error';
+    d.innerHTML = html;
+    stage.appendChild(d);
+  }
+  function clearError() {
+    var old = stage.querySelector('.error');
+    if (old) { old.remove(); }
+  }
+</script>
+</body>
+</html>

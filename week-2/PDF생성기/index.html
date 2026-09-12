@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF 만들기</title>
+
+<!-- PDF 만드는 부품을 인터넷 창고에서 빌려옵니다 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg:#F3F2EF; --card:#FFFFFF; --ink:#1F1D1A; --sub:#6C675F;
+    --line:#DDDAD3; --plum:#6B3A5B; --plum-soft:#F3EBF0;
+    --red:#A83232; --red-soft:#FBF0EF;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:26px 16px 60px;
+    background:var(--bg); color:var(--ink);
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    font-size:20px; line-height:1.7; word-break:keep-all;
+  }
+  .wrap{max-width:1080px; margin:0 auto;}
+
+  h1{font-size:36px; margin:0 0 4px; letter-spacing:-1.5px;}
+  .lead{color:var(--sub); font-size:18px; margin:0 0 26px;}
+
+  .cols{display:grid; gap:22px;}
+  @media(min-width:900px){ .cols{grid-template-columns:1fr 1fr; align-items:start;} }
+
+  .box{
+    background:var(--card); border:2px solid var(--line);
+    border-radius:20px; padding:24px; margin-bottom:20px;
+  }
+  label{display:block; font-size:20px; font-weight:800; margin-bottom:10px;}
+
+  input[type=text], textarea{
+    width:100%; font-size:22px; padding:14px; line-height:1.6;
+    border:3px solid var(--line); border-radius:14px;
+    font-family:inherit; color:var(--ink); background:#fff;
+  }
+  textarea{min-height:300px; resize:vertical;}
+  input:focus, textarea:focus{border-color:var(--plum); outline:none;}
+  .count{font-size:15px; color:var(--sub); text-align:right; margin:8px 0 0;}
+
+  .opt{margin-top:20px;}
+  .opt .cap{font-size:17px; font-weight:700; color:var(--sub); margin-bottom:8px;}
+  .row{display:flex; gap:10px;}
+  .row button{flex:1;}
+
+  button{
+    font-family:inherit; font-size:18px; font-weight:800;
+    padding:14px 10px; border:2px solid var(--line); border-radius:13px;
+    background:#fff; color:var(--sub); cursor:pointer;
+  }
+  button:hover{border-color:var(--plum); color:var(--plum);}
+  button:focus-visible{outline:3px solid var(--plum); outline-offset:2px;}
+  button.on{background:var(--plum); border-color:var(--plum); color:#fff;}
+  button:disabled{background:#EDEBE6; border-color:#EDEBE6; color:#AFAAA2; cursor:default;}
+
+  /* 미리보기 */
+  .peek{
+    background:var(--card); border:2px solid var(--line);
+    border-radius:20px; padding:20px;
+  }
+  .peekhead{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; margin-bottom:14px;
+  }
+  .peekhead .t{font-size:20px; font-weight:800;}
+  .pager{display:flex; align-items:center; gap:10px;}
+  .pager button{padding:8px 14px; font-size:18px;}
+  .pager .now{font-size:17px; color:var(--sub); min-width:66px; text-align:center;}
+
+  #paper{
+    width:100%; height:auto; display:block;
+    border:1px solid var(--line); border-radius:6px;
+    background:#fff;
+    box-shadow:0 4px 18px rgba(31,29,26,.10);
+  }
+  .empty{
+    text-align:center; color:var(--sub); font-size:18px;
+    padding:70px 20px; border:2px dashed var(--line); border-radius:12px;
+  }
+
+  /* 저장 버튼 */
+  .actions{display:grid; gap:12px; margin-top:20px;}
+  @media(min-width:520px){ .actions{grid-template-columns:1.4fr 1fr;} }
+  .actions button{
+    padding:20px 12px; font-size:21px;
+    background:var(--plum); border-color:var(--plum); color:#fff;
+  }
+  .actions button:hover{background:#542C48; border-color:#542C48; color:#fff;}
+  .actions button.ghost{background:#fff; color:var(--plum);}
+  .actions button.ghost:hover{background:var(--plum-soft); color:var(--plum);}
+
+  .notice{
+    margin-top:24px; background:var(--plum-soft);
+    border-left:5px solid var(--plum); border-radius:0 14px 14px 0;
+    padding:16px 20px; font-size:17px; color:#4A2740;
+  }
+  .notice b{color:var(--plum);}
+  .warn{
+    margin-top:14px; background:var(--red-soft);
+    border-left:5px solid var(--red); border-radius:0 14px 14px 0;
+    padding:16px 20px; font-size:17px; color:#6E2422;
+  }
+  footer{margin-top:28px; font-size:16px; color:var(--sub); text-align:center;}
+
+  /* 인쇄로 저장할 때는 종이만 나오게 */
+  @media print{
+    @page{ size:A4; margin:20mm 18mm; }
+    body{background:#fff; padding:0; font-size:12pt;}
+    .noprint{display:none !important;}
+    #printArea{display:block !important;}
+    #printArea h2{font-size:20pt; margin:0 0 16pt;}
+    #printArea p{font-size:12pt; line-height:1.8; margin:0 0 10pt; white-space:pre-wrap;}
+  }
+  #printArea{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="noprint">PDF 만들기</h1>
+  <p class="lead noprint">글을 넣고 버튼 하나만 누르면 PDF 파일이 만들어집니다.</p>
+
+  <div class="cols noprint">
+
+    <!-- 왼쪽 : 입력 -->
+    <div>
+      <div class="box">
+        <label for="title">제목</label>
+        <input type="text" id="title" placeholder="예) 2026년 가을 모임 안내" maxlength="60">
+
+        <div class="opt">
+          <label for="body">내용</label>
+          <textarea id="body" placeholder="여기에 글을 쓰세요.&#10;&#10;줄을 바꾸면 그대로 줄이 바뀝니다.&#10;길게 쓰시면 알아서 다음 쪽으로 넘어갑니다."></textarea>
+          <p class="count"><span id="count">0</span>자 · <span id="pages">0</span>쪽</p>
+        </div>
+
+        <div class="opt">
+          <p class="cap">글자 크기</p>
+          <div class="row" id="sizeRow">
+            <button type="button" data-size="27">작게</button>
+            <button type="button" data-size="31" class="on">보통</button>
+            <button type="button" data-size="38">크게</button>
+          </div>
+        </div>
+
+        <div class="opt">
+          <p class="cap">글꼴</p>
+          <div class="row" id="fontRow">
+            <button type="button" data-font="gothic" class="on">고딕</button>
+            <button type="button" data-font="myeongjo">명조</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오른쪽 : 미리보기 -->
+    <div>
+      <div class="peek">
+        <div class="peekhead">
+          <span class="t">미리보기</span>
+          <div class="pager">
+            <button type="button" id="prev" aria-label="앞 쪽">◀</button>
+            <span class="now" id="now">0 / 0</span>
+            <button type="button" id="next" aria-label="뒤 쪽">▶</button>
+          </div>
+        </div>
+        <canvas id="paper" width="1240" height="1754"></canvas>
+        <div class="empty" id="peekEmpty">왼쪽에 글을 쓰면<br>여기에 종이 모양으로 보입니다</div>
+      </div>
+
+      <div class="actions">
+        <button type="button" id="pdfBtn" disabled>PDF로 저장</button>
+        <button type="button" id="printBtn" class="ghost" disabled>인쇄로 저장</button>
+      </div>
+
+      <div class="notice">
+        <b>PDF로 저장</b> — 버튼 한 번이면 끝. 보이는 그대로 나옵니다.<br>
+        <b>인쇄로 저장</b> — 창이 하나 뜨면 “PDF로 저장”을 고르세요.
+        이렇게 만든 PDF는 <b>글자를 복사할 수 있습니다.</b>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="noprint">쓰신 글은 이 컴퓨터가 기억합니다. 창을 닫아도 남아 있습니다.</footer>
+
+</div>
+
+<!-- 인쇄로 저장할 때만 쓰이는 자리 -->
+<div id="printArea"><h2 id="pTitle"></h2><p id="pBody"></p></div>
+
+<script>
+  /* A4 종이를 150dpi 그림으로 그립니다 (1240 x 1754) */
+  var W = 1240, H = 1754;
+  var MX = 110, TOP = 140, BOT = 150;
+
+  var titleEl = document.getElementById('title');
+  var bodyEl  = document.getElementById('body');
+  var countEl = document.getElementById('count');
+  var pagesEl = document.getElementById('pages');
+  var paper   = document.getElementById('paper');
+  var peekEmpty = document.getElementById('peekEmpty');
+  var nowEl   = document.getElementById('now');
+  var pdfBtn  = document.getElementById('pdfBtn');
+  var printBtn= document.getElementById('printBtn');
+
+  var size = 31;
+  var font = 'gothic';
+  var pages = [];      // 쪽마다 그릴 줄 목록
+  var cur = 0;
+  var timer = null;
+
+  var FONTS = {
+    gothic:   '"Malgun Gothic","맑은 고딕",sans-serif',
+    myeongjo: '"Batang","바탕",serif'
+  };
+
+  /* ---------- 저장해 둔 글 꺼내기 ---------- */
+  try {
+    var saved = JSON.parse(localStorage.getItem('pdfDoc') || 'null');
+    if (saved) {
+      titleEl.value = saved.title || '';
+      bodyEl.value  = saved.body  || '';
+      size = saved.size || 31;
+      font = saved.font || 'gothic';
+      mark('sizeRow', 'size', size);
+      mark('fontRow', 'font', font);
+    }
+  } catch (e) {}
+
+  titleEl.addEventListener('input', onType);
+  bodyEl.addEventListener('input', onType);
+
+  document.getElementById('sizeRow').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) { return; }
+    size = Number(b.getAttribute('data-size'));
+    mark('sizeRow', 'size', size); build();
+  });
+  document.getElementById('fontRow').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) { return; }
+    font = b.getAttribute('data-font');
+    mark('fontRow', 'font', font); build();
+  });
+
+  function mark(rowId, attr, val) {
+    var row = document.getElementById(rowId);
+    [].forEach.call(row.children, function (b) {
+      if (b.getAttribute('data-' + attr) === String(val)) { b.classList.add('on'); }
+      else { b.classList.remove('on'); }
+    });
+  }
+
+  function onType() {
+    clearTimeout(timer);
+    timer = setTimeout(build, 200);
+  }
+
+  /* ---------- 쪽 나누기 ---------- */
+  function build() {
+    var title = titleEl.value.trim();
+    var body  = bodyEl.value;
+    countEl.textContent = body.length;
+    save();
+
+    if (!title && !body.trim()) {
+      pages = []; cur = 0;
+      pagesEl.textContent = '0';
+      nowEl.textContent = '0 / 0';
+      paper.style.display = 'none';
+      peekEmpty.style.display = '';
+      pdfBtn.disabled = true; printBtn.disabled = true;
+      return;
+    }
+
+    var c = paper.getContext('2d');
+    var lineH = Math.round(size * 1.75);
+    var maxW = W - MX * 2;
+    var limit = H - BOT;
+
+    pages = [];
+    var page = [];
+    var y = TOP;
+
+    if (title) {
+      c.font = '700 ' + (size + 14) + 'px ' + FONTS[font];
+      wrap(c, title, maxW).forEach(function (ln) {
+        page.push({ text: ln, y: y, bold: true });
+        y += Math.round((size + 14) * 1.5);
+      });
+      y += Math.round(size * 1.2);   // 제목 아래 여백
+    }
+
+    c.font = '400 ' + size + 'px ' + FONTS[font];
+    var lines = [];
+    body.split('\n').forEach(function (para) {
+      if (para.trim() === '') { lines.push(''); return; }
+      wrap(c, para, maxW).forEach(function (l) { lines.push(l); });
+    });
+
+    lines.forEach(function (ln) {
+      if (y + lineH > limit) { pages.push(page); page = []; y = TOP; }
+      page.push({ text: ln, y: y, bold: false });
+      y += lineH;
+    });
+    pages.push(page);
+
+    pagesEl.textContent = pages.length;
+    if (cur >= pages.length) { cur = pages.length - 1; }
+    paper.style.display = '';
+    peekEmpty.style.display = 'none';
+    pdfBtn.disabled = false; printBtn.disabled = false;
+    draw(cur, paper);
+    nowEl.textContent = (cur + 1) + ' / ' + pages.length;
+  }
+
+  /* 한 줄이 종이 폭을 넘으면 잘라 다음 줄로 */
+  function wrap(c, text, maxW) {
+    var out = [], line = '';
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      var test = line + ch;
+      if (c.measureText(test).width > maxW && line !== '') {
+        var last = line[line.length - 1];
+        if (/[A-Za-z0-9]/.test(ch) && /[A-Za-z0-9]/.test(last)) {
+          var sp = line.lastIndexOf(' ');       // 영어 단어는 중간에서 안 자르게
+          if (sp > 0) {
+            out.push(line.slice(0, sp));
+            line = line.slice(sp + 1) + ch;
+            continue;
+          }
+        }
+        out.push(line);
+        line = ch;
+      } else {
+        line = test;
+      }
+    }
+    out.push(line);
+    return out;
+  }
+
+  /* ---------- 종이 한 장 그리기 ---------- */
+  function draw(i, canvas) {
+    var c = canvas.getContext('2d');
+    c.fillStyle = '#FFFFFF';
+    c.fillRect(0, 0, W, H);
+    c.fillStyle = '#1A1A18';
+    c.textAlign = 'left';
+    c.textBaseline = 'top';
+
+    (pages[i] || []).forEach(function (ln) {
+      c.font = (ln.bold ? '700 ' + (size + 14) : '400 ' + size) + 'px ' + FONTS[font];
+      c.fillText(ln.text, MX, ln.y);
+    });
+
+    if (pages.length > 1) {
+      c.font = '400 22px ' + FONTS.gothic;
+      c.fillStyle = '#8A857D';
+      c.textAlign = 'center';
+      c.fillText((i + 1) + ' / ' + pages.length, W / 2, H - 90);
+      c.textAlign = 'left';
+    }
+  }
+
+  /* ---------- 미리보기 넘기기 ---------- */
+  document.getElementById('prev').addEventListener('click', function () {
+    if (cur > 0) { cur--; draw(cur, paper); nowEl.textContent = (cur + 1) + ' / ' + pages.length; }
+  });
+  document.getElementById('next').addEventListener('click', function () {
+    if (cur < pages.length - 1) { cur++; draw(cur, paper); nowEl.textContent = (cur + 1) + ' / ' + pages.length; }
+  });
+
+  /* ---------- PDF로 저장 ---------- */
+  pdfBtn.addEventListener('click', function () {
+    if (typeof jspdf === 'undefined') {
+      alert('PDF 부품을 가져오지 못했습니다.\n인터넷 연결을 확인하고 F5를 눌러 주세요.');
+      return;
+    }
+    if (!pages.length) { return; }
+
+    var doc = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    var tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+
+    for (var i = 0; i < pages.length; i++) {
+      draw(i, tmp);
+      if (i > 0) { doc.addPage(); }
+      doc.addImage(tmp.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
+    }
+
+    var name = (titleEl.value.trim() || '문서').replace(/[\\/:*?"<>|]/g, '') + '.pdf';
+    var a = document.createElement('a');
+    a.href = doc.output('datauristring');
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+
+  /* ---------- 인쇄로 저장 (글자를 복사할 수 있는 PDF) ---------- */
+  printBtn.addEventListener('click', function () {
+    document.getElementById('pTitle').textContent = titleEl.value.trim();
+    document.getElementById('pBody').textContent = bodyEl.value;
+    window.print();
+  });
+
+  /* ---------- 기억하기 ---------- */
+  function save() {
+    try {
+      localStorage.setItem('pdfDoc', JSON.stringify({
+        title: titleEl.value, body: bodyEl.value, size: size, font: font
+      }));
+    } catch (e) {}
+  }
+
+  build();
+</script>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>나이 · D-day 계산기</title>
+<style>
+  :root{
+    --bg:#FDF8F3; --card:#FFFFFF; --ink:#2B2118; --sub:#7A6A5C;
+    --accent:#D9480F; --accent-soft:#FFF0E6; --line:#EADFD3;
+    --blue:#1864AB; --blue-soft:#E7F1FA; --gray:#9A8C7E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:24px 16px 60px;
+    background:var(--bg); color:var(--ink);
+    font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif;
+    font-size:20px; line-height:1.6;
+  }
+  .wrap{max-width:760px; margin:0 auto;}
+  h1{font-size:34px; margin:0 0 6px; letter-spacing:-1px;}
+  h2{font-size:28px; margin:0 0 4px; letter-spacing:-1px;}
+  .lead{color:var(--sub); font-size:18px; margin:0 0 28px;}
+  hr{border:0; border-top:3px dotted var(--line); margin:44px 0 28px;}
+
+  .box{
+    background:var(--card); border:2px solid var(--line);
+    border-radius:18px; padding:24px; margin-bottom:20px;
+  }
+  label{display:block; font-size:22px; font-weight:700; margin-bottom:12px;}
+  input[type=date], input[type=text]{
+    width:100%; font-size:26px; padding:14px;
+    border:3px solid var(--line); border-radius:14px;
+    font-family:inherit; background:#fff; color:var(--ink);
+  }
+  #birth{border-color:var(--accent); font-size:30px; padding:16px;}
+  #evName:focus, #evDate:focus{border-color:var(--blue); outline:none;}
+  .hint{font-size:16px; color:var(--sub); margin-top:10px;}
+
+  button{
+    font-family:inherit; font-size:22px; font-weight:700;
+    padding:16px; border:0; border-radius:14px;
+    background:var(--blue); color:#fff; cursor:pointer; width:100%;
+  }
+  button:hover{background:#12508a;}
+
+  .grid{display:grid; gap:16px;}
+  @media(min-width:620px){ .grid{grid-template-columns:1fr 1fr;} }
+  .row{display:grid; gap:12px; margin-bottom:12px;}
+  @media(min-width:620px){ .row{grid-template-columns:1.4fr 1fr;} }
+
+  .card{
+    background:var(--card); border:2px solid var(--line);
+    border-radius:18px; padding:22px; text-align:center;
+  }
+  .card .title{font-size:19px; color:var(--sub); margin-bottom:6px;}
+  .card .num{
+    font-size:56px; font-weight:800; color:var(--accent);
+    line-height:1.1; letter-spacing:-2px;
+  }
+  .card .unit{font-size:24px; font-weight:700; color:var(--ink); margin-left:4px;}
+  .card .foot{font-size:17px; color:var(--sub); margin-top:8px;}
+  .big{background:var(--accent-soft); border-color:#F5C6A5;}
+  .big .num{font-size:64px;}
+
+  .ev{
+    background:var(--card); border:2px solid var(--line); border-radius:18px;
+    padding:18px 20px; margin-bottom:14px;
+    display:flex; align-items:center; gap:16px;
+  }
+  .ev.soon{background:var(--blue-soft); border-color:#A9CCE8;}
+  .ev.past{opacity:.55;}
+  .ev .info{flex:1; min-width:0;}
+  .ev .name{font-size:23px; font-weight:800; word-break:keep-all;}
+  .ev .when{font-size:16px; color:var(--sub); margin-top:2px;}
+  .ev .dd{
+    font-size:40px; font-weight:800; color:var(--blue);
+    letter-spacing:-2px; white-space:nowrap;
+  }
+  .ev.past .dd{color:var(--gray);}
+  .ev .del{
+    width:auto; padding:10px 14px; font-size:16px;
+    background:#F1E8DE; color:var(--sub); flex:none;
+  }
+  .ev .del:hover{background:#E6D6C6; color:#8B2C0F;}
+
+  .empty{text-align:center; color:var(--sub); font-size:20px; padding:40px 20px;}
+  footer{margin-top:34px; font-size:16px; color:var(--sub); text-align:center; line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>나이 · D-day 계산기</h1>
+  <p class="lead">생년월일만 넣으면 나머지는 알아서 계산합니다.</p>
+
+  <div class="box">
+    <label for="birth">생년월일을 골라 주세요</label>
+    <input type="date" id="birth">
+    <p class="hint">한 번 넣으면 이 컴퓨터가 기억합니다. 다음에 열면 그대로 나옵니다.</p>
+  </div>
+
+  <div id="result">
+    <div class="empty">↑ 위에 생년월일을 넣어 주세요</div>
+  </div>
+
+  <hr>
+
+  <h2>🎯 나만의 D-day</h2>
+  <p class="lead">기다리는 날을 적어 두면 며칠 남았는지 매일 알려줍니다.</p>
+
+  <div class="box">
+    <label for="evName">무슨 날인가요?</label>
+    <div class="row">
+      <input type="text" id="evName" placeholder="예: 손주 결혼식" maxlength="30">
+      <input type="date" id="evDate">
+    </div>
+    <button id="addBtn">＋ 목록에 추가하기</button>
+    <p class="hint">이름을 적고 → 날짜를 고르고 → 파란 버튼을 누르세요.</p>
+  </div>
+
+  <div id="evList"></div>
+
+  <footer>
+    만 나이 = 법에서 쓰는 진짜 나이<br>
+    세는 나이 = 태어나면 1살, 해가 바뀌면 +1 (옛날 방식)<br>
+    D-30 = 30일 남음 &nbsp;·&nbsp; D-DAY = 바로 오늘 &nbsp;·&nbsp; D+30 = 30일 지남
+  </footer>
+
+</div>
+
+<script>
+  var DAY = 24 * 60 * 60 * 1000;
+  var WEEKDAY = ['일','월','화','수','목','금','토'];
+
+  var birthInput = document.getElementById('birth');
+  var resultBox  = document.getElementById('result');
+  var evName     = document.getElementById('evName');
+  var evDate     = document.getElementById('evDate');
+  var addBtn     = document.getElementById('addBtn');
+  var evList     = document.getElementById('evList');
+
+  /* ---------- 공통 도구 ---------- */
+  function today0() {
+    var n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+  function toDate(str) {
+    var p = str.split('-');
+    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  }
+  function comma(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmt(d) {
+    return d.getFullYear() + '년 ' + (d.getMonth()+1) + '월 ' +
+           d.getDate() + '일 (' + WEEKDAY[d.getDay()] + ')';
+  }
+  function load(key, fallback) {
+    try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch (e) { return fallback; }
+  }
+  function save(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  }
+
+  /* ---------- 1) 나이 계산 ---------- */
+  var savedBirth = load('myBirthday', null);
+  if (savedBirth) { birthInput.value = savedBirth; }
+  birthInput.addEventListener('change', runAge);
+  runAge();
+
+  function runAge() {
+    var v = birthInput.value;
+    if (!v) {
+      resultBox.innerHTML = '<div class="empty">↑ 위에 생년월일을 넣어 주세요</div>';
+      return;
+    }
+    save('myBirthday', v);
+
+    var p = v.split('-');
+    var by = Number(p[0]), bm = Number(p[1]), bd = Number(p[2]);
+    var birth = toDate(v);
+    var today = today0();
+
+    if (birth > today) {
+      resultBox.innerHTML = '<div class="empty">아직 태어나지 않은 날짜입니다 🙂</div>';
+      return;
+    }
+
+    var age = today.getFullYear() - by;
+    var had = (today.getMonth()+1 > bm) ||
+              (today.getMonth()+1 === bm && today.getDate() >= bd);
+    if (!had) { age = age - 1; }
+
+    var koreanAge = today.getFullYear() - by + 1;
+    var lived = Math.round((today - birth) / DAY);
+
+    var next = new Date(today.getFullYear(), bm - 1, bd);
+    if (next < today) { next = new Date(today.getFullYear() + 1, bm - 1, bd); }
+    var dday = Math.round((next - today) / DAY);
+    var ddayText = (dday === 0) ? '오늘!' : 'D-' + dday;
+    var nextText = (dday === 0)
+      ? '오늘이 생일입니다 🎂'
+      : fmt(next) + ' · 만 ' + (next.getFullYear() - by) + '세';
+
+    var mile = (Math.floor(lived / 1000) + 1) * 1000;
+    var mileDate = new Date(birth.getTime() + mile * DAY);
+    var mileLeft = Math.round((mileDate - today) / DAY);
+
+    resultBox.innerHTML =
+      '<div class="grid">' +
+        card('만 나이', age, '세', '법으로 쓰는 나이') +
+        card('세는 나이', koreanAge, '세', '옛날 방식 나이') +
+      '</div><div style="height:16px"></div>' +
+      '<div class="card big"><div class="title">태어나서 오늘까지</div>' +
+        '<div class="num">' + comma(lived) + '<span class="unit">일</span></div>' +
+        '<div class="foot">약 ' + Math.floor(lived/365) + '년 · ' +
+          comma(lived*24) + '시간을 살아오셨습니다</div></div>' +
+      '<div style="height:16px"></div>' +
+      '<div class="card big"><div class="title">다음 생일까지</div>' +
+        '<div class="num">' + ddayText + '</div>' +
+        '<div class="foot">' + nextText + '</div></div>' +
+      '<div style="height:16px"></div>' +
+      '<div class="card"><div class="title">다음 기념일</div>' +
+        '<div class="num">' + comma(mile) + '<span class="unit">일</span></div>' +
+        '<div class="foot">' + fmt(mileDate) + ' · ' + comma(mileLeft) + '일 남음</div></div>';
+  }
+
+  function card(title, num, unit, foot) {
+    return '<div class="card"><div class="title">' + title + '</div>' +
+      '<div class="num">' + num + '<span class="unit">' + unit + '</span></div>' +
+      '<div class="foot">' + foot + '</div></div>';
+  }
+
+  /* ---------- 2) 나만의 D-day ---------- */
+  var DEFAULTS = [
+    { name: '제22대 대통령 선거', date: '2030-03-27' },
+    { name: '새해 첫날',          date: '2027-01-01' }
+  ];
+  var events = load('myEvents', null);
+  if (events === null) { events = DEFAULTS; save('myEvents', events); }
+
+  addBtn.addEventListener('click', addEvent);
+  evName.addEventListener('keydown', function (e) { if (e.key === 'Enter') addEvent(); });
+  evDate.addEventListener('keydown', function (e) { if (e.key === 'Enter') addEvent(); });
+
+  function addEvent() {
+    var name = evName.value.trim();
+    var date = evDate.value;
+    if (!name) { alert('무슨 날인지 이름을 적어 주세요.'); evName.focus(); return; }
+    if (!date) { alert('날짜를 골라 주세요.'); evDate.focus(); return; }
+    events.push({ name: name, date: date });
+    save('myEvents', events);
+    evName.value = '';
+    evDate.value = '';
+    evName.focus();
+    renderEvents();
+  }
+
+  evList.addEventListener('click', function (e) {
+    var btn = e.target.closest('.del');
+    if (!btn) { return; }
+    var i = Number(btn.getAttribute('data-i'));
+    if (confirm('「' + events[i].name + '」을(를) 목록에서 지울까요?')) {
+      events.splice(i, 1);
+      save('myEvents', events);
+      renderEvents();
+    }
+  });
+
+  function renderEvents() {
+    if (events.length === 0) {
+      evList.innerHTML = '<div class="empty">아직 없습니다. 위에서 하나 추가해 보세요.</div>';
+      return;
+    }
+    var today = today0();
+
+    var rows = events.map(function (ev, i) {
+      var d = toDate(ev.date);
+      return { ev: ev, i: i, d: d, left: Math.round((d - today) / DAY) };
+    });
+
+    // 다가오는 날이 위로, 지난 날은 아래로
+    rows.sort(function (a, b) {
+      var ap = a.left < 0, bp = b.left < 0;
+      if (ap !== bp) { return ap ? 1 : -1; }
+      return ap ? b.left - a.left : a.left - b.left;
+    });
+
+    evList.innerHTML = rows.map(function (r) {
+      var cls = 'ev', dd, foot;
+      if (r.left === 0) {
+        cls += ' soon'; dd = 'D-DAY'; foot = '바로 오늘입니다 🎉';
+      } else if (r.left > 0) {
+        dd = 'D-' + comma(r.left); foot = comma(r.left) + '일 남음';
+        if (r.left <= 30) { cls += ' soon'; }
+      } else {
+        cls += ' past'; dd = 'D+' + comma(-r.left); foot = comma(-r.left) + '일 지남';
+      }
+
+      return '<div class="' + cls + '">' +
+        '<div class="info">' +
+          '<div class="name">' + esc(r.ev.name) + '</div>' +
+          '<div class="when">' + fmt(r.d) + ' · ' + foot + '</div>' +
+        '</div>' +
+        '<div class="dd">' + dd + '</div>' +
+        '<button class="del" data-i="' + r.i + '">지우기</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  renderEvents();
+</script>
+</body>
+</html>
