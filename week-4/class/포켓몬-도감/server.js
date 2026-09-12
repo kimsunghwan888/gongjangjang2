@@ -30,7 +30,7 @@ const STAT_LABELS = {
 };
 const STAT_ORDER = Object.keys(STAT_LABELS);
 
-// ── 인메모리 저장소: 포켓몬 10마리 ────────────────────────
+// ── 인메모리 저장소: 포켓몬 5마리 ────────────────────────
 // 서버를 껐다 켜면 이 원본 상태로 되돌아간다.
 let pokedex = [
   {
@@ -87,63 +87,6 @@ let pokedex = [
     description: '커다란 눈으로 상대를 최면 상태로 만들고 기분 좋은 자장가를 불러 잠들게 한다.',
     height: 0.5, weight: 5.5,
     stats: { hp: 115, attack: 45, defense: 20, 'special-attack': 45, 'special-defense': 25, speed: 20 },
-  },
-  {
-    id: 52, enName: 'meowth', name: '동전냥', genus: '고양이포켓몬',
-    types: ['normal'],
-    abilities: [
-      { slug: 'pickup', name: '픽업', hidden: false },
-      { slug: 'technician', name: '테크니션', hidden: false },
-      { slug: 'unnerve', name: '긴장감', hidden: true },
-    ],
-    description: '동전처럼 동그랗고 반짝이는 것을 매우 좋아한다. 낮에는 잠만 자다가 밤이 되면 돌아다닌다.',
-    height: 0.4, weight: 4.2,
-    stats: { hp: 40, attack: 45, defense: 35, 'special-attack': 40, 'special-defense': 40, speed: 90 },
-  },
-  {
-    id: 94, enName: 'gengar', name: '밤그늘', genus: '섀도포켓몬',
-    types: ['ghost', 'poison'],
-    abilities: [
-      { slug: 'cursed-body', name: '저주받은바디', hidden: false },
-    ],
-    description: '어두운 밤 자신의 그림자가 앞질러 갔다면 그것은 밤그늘이 흉내 낸 것이다.',
-    height: 1.5, weight: 40.5,
-    stats: { hp: 60, attack: 65, defense: 60, 'special-attack': 130, 'special-defense': 75, speed: 110 },
-  },
-  {
-    id: 133, enName: 'eevee', name: '여덟꼴', genus: '진화포켓몬',
-    types: ['normal'],
-    abilities: [
-      { slug: 'run-away', name: '도주', hidden: false },
-      { slug: 'adaptability', name: '적응력', hidden: false },
-      { slug: 'anticipation', name: '위험예지', hidden: true },
-    ],
-    description: '불규칙한 유전자를 가지고 있어 주변 환경에 맞춰 여러 모습으로 진화한다.',
-    height: 0.3, weight: 6.5,
-    stats: { hp: 55, attack: 55, defense: 50, 'special-attack': 45, 'special-defense': 65, speed: 55 },
-  },
-  {
-    id: 143, enName: 'snorlax', name: '먹잠보', genus: '잠꾸러기포켓몬',
-    types: ['normal'],
-    abilities: [
-      { slug: 'immunity', name: '면역', hidden: false },
-      { slug: 'thick-fat', name: '두꺼운지방', hidden: false },
-      { slug: 'gluttony', name: '먹보', hidden: true },
-    ],
-    description: '하루에 400kg 이상 먹지 않으면 만족하지 못한다. 다 먹고 나면 졸려서 그대로 잠들어버린다.',
-    height: 2.1, weight: 460.0,
-    stats: { hp: 160, attack: 110, defense: 65, 'special-attack': 65, 'special-defense': 110, speed: 30 },
-  },
-  {
-    id: 150, enName: 'mewtwo', name: '초능왕', genus: '유전포켓몬',
-    types: ['psychic'],
-    abilities: [
-      { slug: 'pressure', name: '프레셔', hidden: false },
-      { slug: 'unnerve', name: '긴장감', hidden: true },
-    ],
-    description: '한 과학자가 오랜 유전자 연구 끝에 만들어낸 포켓몬. 흉악한 마음만을 갖게 되었다.',
-    height: 2.0, weight: 122.0,
-    stats: { hp: 106, attack: 110, defense: 90, 'special-attack': 154, 'special-defense': 90, speed: 130 },
   },
 ];
 
