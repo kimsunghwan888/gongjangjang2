@@ -1,0 +1,13 @@
+{
+  "name": "pokedex-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "포켓몬 도감 - 직접 만든 Node.js API 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

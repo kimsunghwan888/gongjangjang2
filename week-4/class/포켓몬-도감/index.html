@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>포켓몬 도감</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <!-- ⚠️ 모든 CDN 버전 고정. Babel 은 반드시 7.x -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <style>
+    /* Tailwind 유틸리티로 표현 불가한 것만 */
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes popIn { from { opacity: 0; transform: scale(.94) translateY(12px) } to { opacity: 1; transform: none } }
+    .anim-fade { animation: fadeIn .18s ease-out both }
+    .anim-pop { animation: popIn .22s cubic-bezier(.2,.9,.3,1.2) both }
+    .bar-fill { transition: width .6s cubic-bezier(.2,.8,.2,1) }
+    /* 도트 스프라이트를 확대해도 뭉개지지 않게 */
+    .pixelated { image-rendering: pixelated }
+  </style>
+</head>
+<body class="bg-slate-100">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useMemo, useEffect, useCallback, useRef } = React;
+
+    // ========================================
+    // ⚙️ Config — 내가 만든 서버
+    // ========================================
+    // 화면과 자료를 같은 서버가 함께 내려주므로 주소 앞부분이 필요 없다
+    const API_BASE_URL = '/api';
+
+    const pixelSprite  = id => `/images/${id}.png`;     // 목록용 도트 그림
+    const artworkSprite = id => `/images/art/${id}.png`; // 상세용 일러스트
+
+    const PAGE_SIZE = 48;   // 스크롤 한 번에 더 그리는 카드 수
+    const MAX_STAT = 255;   // 종족값 막대 기준치 (실제 최댓값)
+
+    // 타입별 표시 스타일 — API 는 색상을 주지 않으므로 슬러그 기준으로 매핑
+    const TYPE_META = {
+      normal:   { emoji: '⭐', bg: 'bg-stone-400',   soft: 'bg-stone-100 text-stone-700',     ring: 'from-stone-300 to-stone-400' },
+      fighting: { emoji: '🥊', bg: 'bg-red-700',     soft: 'bg-red-100 text-red-800',         ring: 'from-red-500 to-red-700' },
+      flying:   { emoji: '🕊️', bg: 'bg-indigo-400',  soft: 'bg-indigo-100 text-indigo-800',   ring: 'from-indigo-300 to-sky-400' },
+      poison:   { emoji: '☠️', bg: 'bg-purple-500',  soft: 'bg-purple-100 text-purple-800',   ring: 'from-purple-400 to-fuchsia-500' },
+      ground:   { emoji: '🏜️', bg: 'bg-amber-600',   soft: 'bg-amber-100 text-amber-800',     ring: 'from-amber-400 to-yellow-600' },
+      rock:     { emoji: '🪨', bg: 'bg-yellow-700',  soft: 'bg-yellow-100 text-yellow-900',   ring: 'from-yellow-600 to-amber-700' },
+      bug:      { emoji: '🐛', bg: 'bg-lime-500',    soft: 'bg-lime-100 text-lime-800',       ring: 'from-lime-400 to-green-500' },
+      ghost:    { emoji: '👻', bg: 'bg-violet-600',  soft: 'bg-violet-100 text-violet-800',   ring: 'from-violet-400 to-indigo-600' },
+      steel:    { emoji: '⚙️', bg: 'bg-slate-500',   soft: 'bg-slate-200 text-slate-800',     ring: 'from-slate-400 to-slate-600' },
+      fire:     { emoji: '🔥', bg: 'bg-orange-500',  soft: 'bg-orange-100 text-orange-800',   ring: 'from-orange-400 to-red-500' },
+      water:    { emoji: '💧', bg: 'bg-sky-500',     soft: 'bg-sky-100 text-sky-800',         ring: 'from-sky-400 to-blue-500' },
+      grass:    { emoji: '🌱', bg: 'bg-green-500',   soft: 'bg-green-100 text-green-800',     ring: 'from-green-400 to-emerald-500' },
+      electric: { emoji: '⚡', bg: 'bg-yellow-400',  soft: 'bg-yellow-100 text-yellow-800',   ring: 'from-yellow-300 to-amber-500' },
+      psychic:  { emoji: '🔮', bg: 'bg-pink-500',    soft: 'bg-pink-100 text-pink-800',       ring: 'from-pink-400 to-rose-500' },
+      ice:      { emoji: '❄️', bg: 'bg-cyan-400',    soft: 'bg-cyan-100 text-cyan-800',       ring: 'from-cyan-300 to-sky-400' },
+      dragon:   { emoji: '🐉', bg: 'bg-indigo-600',  soft: 'bg-indigo-100 text-indigo-800',   ring: 'from-indigo-500 to-purple-600' },
+      dark:     { emoji: '🌑', bg: 'bg-neutral-700', soft: 'bg-neutral-200 text-neutral-800', ring: 'from-neutral-600 to-neutral-800' },
+      fairy:    { emoji: '🧚', bg: 'bg-rose-400',    soft: 'bg-rose-100 text-rose-800',       ring: 'from-rose-300 to-pink-400' },
+    };
+    const TYPE_ORDER = Object.keys(TYPE_META);
+    const DEFAULT_TYPE_META = { emoji: '❔', bg: 'bg-slate-500', soft: 'bg-slate-100 text-slate-700', ring: 'from-slate-400 to-slate-500' };
+    const typeMeta = slug => TYPE_META[slug] || DEFAULT_TYPE_META;
+
+    const padId = id => '#' + String(id).padStart(4, '0');
+
+    // ========================================
+    // 📡 API Layer — 내가 만든 서버(server.js) 호출
+    // ========================================
+
+    // 서버는 언제나 { success, data, message? } 모양으로 답한다
+    async function fetchApi(url, signal) {
+      const res = await fetch(url, { signal });
+
+      let payload;
+      try {
+        payload = await res.json();
+      } catch (err) {
+        throw new Error(`서버 응답을 읽지 못했습니다 (${res.status})`);
+      }
+
+      if (!res.ok || !payload.success) {
+        throw new Error(payload?.message || `요청 실패 (${res.status})`);
+      }
+      return payload.data;
+    }
+
+    // ----- 전체 도감 목록 -----
+    // 서버가 한국어 이름·분류·타입까지 완성해서 주므로 그대로 쓴다
+    async function fetchDexIndex(signal) {
+      const list = await fetchApi(`${API_BASE_URL}/pokemon`, signal);
+      return { list, korean: true };
+    }
+
+    // ----- 개별 포켓몬 상세 (카드를 누르면 조회) -----
+    async function fetchPokemonDetail(id, signal) {
+      return fetchApi(`${API_BASE_URL}/pokemon/${id}`, signal);
+    }
+
+    // ========================================
+    // 🪝 Custom Hooks
+    // ========================================
+    function useDexIndex() {
+      const [state, setState] = useState({ list: [], korean: true, loading: true, error: null });
+      const [attempt, setAttempt] = useState(0);
+
+      useEffect(() => {
+        const controller = new AbortController();
+        let alive = true;
+
+        setState(prev => ({ ...prev, loading: true, error: null }));
+        fetchDexIndex(controller.signal)
+          .then(({ list, korean }) => {
+            if (alive) setState({ list, korean, loading: false, error: null });
+          })
+          .catch(err => {
+            if (!alive || err.name === 'AbortError') return;
+            setState({ list: [], korean: true, loading: false, error: err });
+          });
+
+        return () => { alive = false; controller.abort(); };
+      }, [attempt]);
+
+      const reload = useCallback(() => setAttempt(n => n + 1), []);
+      return { ...state, reload };
+    }
+
+    function usePokemonDetail(id) {
+      const [state, setState] = useState({ data: null, loading: false, error: null });
+
+      useEffect(() => {
+        if (!id) {
+          setState({ data: null, loading: false, error: null });
+          return;
+        }
+        const controller = new AbortController();
+        let alive = true;
+
+        setState({ data: null, loading: true, error: null });
+        fetchPokemonDetail(id, controller.signal)
+          .then(data => { if (alive) setState({ data, loading: false, error: null }); })
+          .catch(err => {
+            if (!alive || err.name === 'AbortError') return;
+            setState({ data: null, loading: false, error: err });
+          });
+
+        return () => { alive = false; controller.abort(); };
+      }, [id]);
+
+      return state;
+    }
+
+    // 무한 스크롤 — 센티넬이 보이면 다음 페이지를 그린다
+    function useInfiniteScroll(hasMore, loadMore) {
+      const sentinelRef = useRef(null);
+
+      useEffect(() => {
+        const node = sentinelRef.current;
+        if (!node || !hasMore) return;
+
+        const observer = new IntersectionObserver(entries => {
+          if (entries.some(e => e.isIntersecting)) loadMore();
+        }, { rootMargin: '400px' });
+
+        observer.observe(node);
+        return () => observer.disconnect();
+      }, [hasMore, loadMore]);
+
+      return sentinelRef;
+    }
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    function Button({ variant = 'primary', size = 'md', disabled = false, onClick, className = '', children, ...rest }) {
+      const variants = {
+        primary: 'bg-slate-900 text-white hover:bg-slate-700',
+        secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50',
+        danger: 'bg-red-600 text-white hover:bg-red-700',
+        ghost: 'bg-transparent text-slate-600 hover:bg-slate-200',
+      };
+      const sizes = { sm: 'px-3 py-1 text-sm', md: 'px-4 py-2 text-sm', lg: 'px-6 py-3 text-base' };
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          className={`rounded-lg font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500 disabled:opacity-40 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+          {...rest}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ type = 'text', label, value, onChange, placeholder, error, disabled = false, className = '' }) {
+      return (
+        <label className={`block ${className}`}>
+          {label && <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>}
+          <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            disabled={disabled}
+            aria-invalid={!!error}
+            className={`w-full rounded-lg border bg-white px-4 py-2.5 text-slate-800 placeholder-slate-400 shadow-sm transition focus:outline-none focus:ring-2 disabled:bg-slate-100 ${
+              error ? 'border-red-400 focus:ring-red-300' : 'border-slate-300 focus:ring-slate-400'
+            }`}
+          />
+          {error && <span className="mt-1 block text-sm text-red-600">{error}</span>}
+        </label>
+      );
+    }
+
+    function Card({ className = '', children, ...rest }) {
+      return (
+        <div className={`rounded-2xl bg-white p-5 shadow-sm ${className}`} {...rest}>
+          {children}
+        </div>
+      );
+    }
+
+    function Badge({ className = '', children }) {
+      return (
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    function Modal({ isOpen, onClose, title, size = 'md', onArrowKey, children }) {
+      useEffect(() => {
+        if (!isOpen) return;
+        const onKey = e => {
+          if (e.key === 'Escape') onClose();
+          if (onArrowKey && e.key === 'ArrowLeft') onArrowKey(-1);
+          if (onArrowKey && e.key === 'ArrowRight') onArrowKey(1);
+        };
+        document.addEventListener('keydown', onKey);
+        document.body.style.overflow = 'hidden';
+        return () => {
+          document.removeEventListener('keydown', onKey);
+          document.body.style.overflow = '';
+        };
+      }, [isOpen, onClose, onArrowKey]);
+
+      if (!isOpen) return null;
+      const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' };
+
+      return (
+        <div
+          className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4"
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+        >
+          <div
+            className={`anim-pop max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl ${sizes[size]}`}
+            onClick={e => e.stopPropagation()}
+          >
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🧩 Common Components
+    // ========================================
+    function TypeBadge({ type }) {
+      return <Badge className={typeMeta(type.slug).soft}>{type.name}</Badge>;
+    }
+
+    function Sprite({ entry, variant = 'pixel', className = '' }) {
+      const [failed, setFailed] = useState(false);
+      const src = variant === 'art' ? artworkSprite(entry.id) : pixelSprite(entry.id);
+
+      useEffect(() => { setFailed(false); }, [entry.id, variant]);
+
+      if (failed) {
+        return (
+          <div className={`flex items-center justify-center ${className}`} aria-hidden="true">
+            <span className="text-4xl">{typeMeta(entry.types?.[0]?.slug).emoji}</span>
+          </div>
+        );
+      }
+      return (
+        <img
+          src={src}
+          alt={`${entry.name} 이미지`}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className={`object-contain ${variant === 'pixel' ? 'pixelated' : 'drop-shadow'} ${className}`}
+        />
+      );
+    }
+
+    function StatBar({ label, value }) {
+      const pct = Math.min(100, Math.round((value / MAX_STAT) * 100));
+      const tone = value >= 100 ? 'bg-emerald-500' : value >= 60 ? 'bg-amber-400' : 'bg-rose-400';
+      return (
+        <div className="flex items-center gap-3">
+          <span className="w-20 shrink-0 text-xs font-medium text-slate-500">{label}</span>
+          <span className="w-8 shrink-0 text-right text-sm font-bold tabular-nums text-slate-800">{value}</span>
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div className={`bar-fill h-full rounded-full ${tone}`} style={{ width: pct + '%' }} />
+          </div>
+        </div>
+      );
+    }
+
+    function Header({ total, shown, loading }) {
+      return (
+        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-b from-red-500 to-red-600 shadow-inner">
+                <div className="h-3.5 w-3.5 rounded-full border-2 border-slate-800 bg-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">포켓몬 도감</h1>
+                <p className="text-xs text-slate-500">
+                  {loading
+                    ? '도감을 불러오는 중…'
+                    : `전체 ${total}마리 중 ${shown}마리 표시 · 내 서버에서 불러옴`}
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    function SkeletonGrid({ count }) {
+      return (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-hidden="true">
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} className="animate-pulse rounded-2xl bg-white p-4 shadow-sm">
+              <div className="h-3 w-10 rounded bg-slate-200" />
+              <div className="mx-auto my-3 h-20 w-20 rounded-full bg-slate-200" />
+              <div className="h-4 w-20 rounded bg-slate-200" />
+              <div className="mt-2 h-3 w-14 rounded bg-slate-100" />
+              <div className="mt-3 h-5 w-12 rounded-full bg-slate-100" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function ErrorState({ error, onRetry }) {
+      return (
+        <Card className="flex flex-col items-center gap-3 py-14 text-center">
+          <span className="text-4xl" aria-hidden="true">📡</span>
+          <p className="font-semibold text-slate-700">도감을 불러오지 못했습니다</p>
+          <p className="max-w-sm text-sm text-slate-500">
+            네트워크 상태를 확인해 주세요. 응답: {error?.message || '알 수 없는 오류'}
+          </p>
+          <Button onClick={onRetry} className="mt-1">다시 시도</Button>
+        </Card>
+      );
+    }
+
+    function EmptyState({ onReset }) {
+      return (
+        <Card className="flex flex-col items-center gap-3 py-14 text-center">
+          <span className="text-4xl" aria-hidden="true">🔍</span>
+          <p className="font-semibold text-slate-700">검색 결과가 없습니다</p>
+          <p className="text-sm text-slate-500">이름(한글·영문)이나 도감 번호로 찾아보세요.</p>
+          <Button variant="secondary" size="sm" onClick={onReset} className="mt-1">필터 초기화</Button>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 📄 Page Components
+    // ========================================
+    function PokemonCard({ entry, onSelect }) {
+      const ring = typeMeta(entry.types[0]?.slug).ring;
+      return (
+        <button
+          type="button"
+          onClick={() => onSelect(entry)}
+          aria-label={`${entry.name} 상세 보기`}
+          className="group relative overflow-hidden rounded-2xl bg-white p-4 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+        >
+          <div className={`absolute -right-8 -top-8 h-28 w-28 rounded-full bg-gradient-to-br ${ring} opacity-15 transition group-hover:scale-125`} />
+          <span className="relative text-xs font-bold tabular-nums text-slate-400">{padId(entry.id)}</span>
+          <Sprite entry={entry} className="relative mx-auto h-24 w-24 transition group-hover:scale-110" />
+          <h2 className="relative truncate text-base font-extrabold text-slate-900">{entry.name}</h2>
+          <p className="relative truncate text-xs capitalize text-slate-400">{entry.enName}</p>
+          <div className="relative mt-2 flex flex-wrap gap-1.5">
+            {entry.types.map(t => <TypeBadge key={t.slug} type={t} />)}
+          </div>
+        </button>
+      );
+    }
+
+    function DetailSkeleton() {
+      return (
+        <div className="animate-pulse space-y-4" aria-hidden="true">
+          <div className="h-4 w-2/3 rounded bg-slate-200" />
+          <div className="h-4 w-1/2 rounded bg-slate-200" />
+          <div className="grid grid-cols-3 gap-3">
+            <div className="h-16 rounded-xl bg-slate-100" />
+            <div className="h-16 rounded-xl bg-slate-100" />
+            <div className="h-16 rounded-xl bg-slate-100" />
+          </div>
+          <div className="h-3 w-full rounded bg-slate-100" />
+          <div className="h-3 w-full rounded bg-slate-100" />
+          <div className="h-3 w-5/6 rounded bg-slate-100" />
+        </div>
+      );
+    }
+
+    function PokemonDetail({ entry, onClose, onNavigate, hasPrev, hasNext }) {
+      const { data, loading, error } = usePokemonDetail(entry?.id);
+      if (!entry) return null;
+
+      const ring = typeMeta(entry.types[0]?.slug).ring;
+      const types = data?.types?.length ? data.types : entry.types;
+
+      return (
+        <>
+          <div className={`relative bg-gradient-to-br ${ring} px-6 pb-8 pt-5`}>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="닫기"
+              className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/30 text-lg font-bold text-white transition hover:bg-white/50"
+            >
+              ✕
+            </button>
+            <span className="text-sm font-bold tabular-nums text-white/80">{padId(entry.id)}</span>
+            <h2 className="text-3xl font-extrabold text-white">{entry.name}</h2>
+            <p className="text-sm capitalize text-white/80">
+              {entry.enName}{entry.genus ? ` · ${entry.genus}` : ''}
+            </p>
+            <div className="mt-3 flex gap-2">
+              {types.map(t => (
+                <Badge key={t.slug} className="bg-white/25 text-white backdrop-blur">{t.name}</Badge>
+              ))}
+            </div>
+            <Sprite entry={entry} variant="art" className="mx-auto -mb-14 h-40 w-40" />
+          </div>
+
+          <div className="space-y-6 px-6 pb-8 pt-16">
+            {loading ? (
+              <DetailSkeleton />
+            ) : error ? (
+              <p className="rounded-xl bg-rose-50 p-4 text-center text-sm text-rose-700">
+                상세 정보를 불러오지 못했습니다. ({error.message})
+              </p>
+            ) : data ? (
+              <>
+                <p className="text-sm leading-relaxed text-slate-600">{data.description}</p>
+
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="rounded-xl bg-slate-50 py-3">
+                    <p className="text-xs text-slate-500">키</p>
+                    <p className="font-bold text-slate-800">{data.height.toFixed(1)} m</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 py-3">
+                    <p className="text-xs text-slate-500">무게</p>
+                    <p className="font-bold text-slate-800">{data.weight.toFixed(1)} kg</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 py-3">
+                    <p className="text-xs text-slate-500">종족값 합계</p>
+                    <p className="font-bold tabular-nums text-slate-800">{data.total}</p>
+                  </div>
+                </div>
+
+                <section>
+                  <h3 className="mb-2 text-sm font-bold text-slate-700">특성</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {data.abilities.map(a => (
+                      <Badge key={a.slug} className={a.hidden ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'}>
+                        {a.name}{a.hidden ? ' (숨은특성)' : ''}
+                      </Badge>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="mb-3 text-sm font-bold text-slate-700">종족값</h3>
+                  <div className="space-y-2.5">
+                    {data.stats.map(s => (
+                      <StatBar key={s.slug} label={s.label} value={s.value} />
+                    ))}
+                  </div>
+                </section>
+              </>
+            ) : null}
+
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => onNavigate(-1)} disabled={!hasPrev} className="flex-1">← 이전</Button>
+              <Button variant="secondary" onClick={onClose} className="flex-1">닫기</Button>
+              <Button variant="secondary" onClick={() => onNavigate(1)} disabled={!hasNext} className="flex-1">다음 →</Button>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    function PokedexPage() {
+      const { list, korean, loading, error, reload } = useDexIndex();
+
+      const [keyword, setKeyword] = useState('');
+      const [typeSlug, setTypeSlug] = useState('all');
+      const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+      const [selectedId, setSelectedId] = useState(null);
+
+      // 인덱스에 실제로 존재하는 타입만 칩으로 노출 (표준 타입 순서 유지)
+      const typeOptions = useMemo(() => {
+        const map = new Map();
+        list.forEach(p => p.types.forEach(t => map.set(t.slug, t.name)));
+        const sorted = TYPE_ORDER.filter(slug => map.has(slug)).map(slug => ({ slug, name: map.get(slug) }));
+        return [{ slug: 'all', name: '전체' }, ...sorted];
+      }, [list]);
+
+      const filtered = useMemo(() => {
+        const q = keyword.trim().toLowerCase();
+        const numeric = q.replace(/[^0-9]/g, '').replace(/^0+/, ''); // '#0025' → '25'
+        return list.filter(p => {
+          const matchType = typeSlug === 'all' || p.types.some(t => t.slug === typeSlug);
+          if (!matchType) return false;
+          if (!q) return true;
+          return (
+            p.name.toLowerCase().includes(q) ||
+            p.enName.toLowerCase().includes(q) ||
+            (numeric && String(p.id).includes(numeric))
+          );
+        });
+      }, [list, keyword, typeSlug]);
+
+      // 검색·필터가 바뀌면 다시 첫 페이지부터
+      useEffect(() => { setVisibleCount(PAGE_SIZE); }, [keyword, typeSlug]);
+
+      const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+      const hasMore = visibleCount < filtered.length;
+      const loadMore = useCallback(() => setVisibleCount(n => n + PAGE_SIZE), []);
+      const sentinelRef = useInfiniteScroll(hasMore, loadMore);
+
+      const reset = useCallback(() => { setKeyword(''); setTypeSlug('all'); }, []);
+
+      // 모달 이전/다음 — 현재 필터 결과 안에서 이동
+      const selectedIndex = filtered.findIndex(p => p.id === selectedId);
+      const selected = selectedIndex >= 0 ? filtered[selectedIndex] : null;
+      const navigate = useCallback(delta => {
+        setSelectedId(current => {
+          const idx = filtered.findIndex(p => p.id === current);
+          const next = filtered[idx + delta];
+          return next ? next.id : current;
+        });
+      }, [filtered]);
+
+      return (
+        <div className="min-h-screen bg-slate-100">
+          <Header total={list.length} shown={filtered.length} loading={loading} />
+
+          <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+            <div className="mb-6 space-y-3">
+              <Input
+                value={keyword}
+                onChange={e => setKeyword(e.target.value)}
+                placeholder="이름 또는 도감 번호로 검색 (예: 찌릿볼, pikachu, 25)"
+                disabled={loading || !!error}
+              />
+              {typeOptions.length > 1 && (
+                <div className="flex flex-wrap gap-2" role="group" aria-label="타입 필터">
+                  {typeOptions.map(t => {
+                    const active = typeSlug === t.slug;
+                    const solid = t.slug === 'all' ? 'bg-slate-900 text-white' : `${typeMeta(t.slug).bg} text-white`;
+                    return (
+                      <button
+                        key={t.slug}
+                        type="button"
+                        onClick={() => setTypeSlug(t.slug)}
+                        aria-pressed={active}
+                        className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 ${
+                          active ? solid + ' shadow' : 'bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {loading ? (
+              <SkeletonGrid count={PAGE_SIZE} />
+            ) : error ? (
+              <ErrorState error={error} onRetry={reload} />
+            ) : filtered.length === 0 ? (
+              <EmptyState onReset={reset} />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {visible.map(p => (
+                    <PokemonCard key={p.id} entry={p} onSelect={e => setSelectedId(e.id)} />
+                  ))}
+                </div>
+
+                {hasMore && (
+                  <div ref={sentinelRef} className="mt-8 flex flex-col items-center gap-3">
+                    <Button variant="secondary" onClick={loadMore}>더 보기 ({filtered.length - visible.length}마리 남음)</Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            <p className="mt-8 text-center text-xs text-slate-400">
+              카드를 누르면 상세 정보를 볼 수 있어요. 모달에서 ← → 키로 이동 · 데이터 제공: 내가 만든 server.js
+            </p>
+          </main>
+
+          <Modal
+            isOpen={!!selected}
+            onClose={() => setSelectedId(null)}
+            title={selected?.name}
+            size="md"
+            onArrowKey={navigate}
+          >
+            <PokemonDetail
+              entry={selected}
+              onClose={() => setSelectedId(null)}
+              onNavigate={navigate}
+              hasPrev={selectedIndex > 0}
+              hasNext={selectedIndex >= 0 && selectedIndex < filtered.length - 1}
+            />
+          </Modal>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🚀 App
+    // ========================================
+    function App() {
+      return <PokedexPage />;
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
