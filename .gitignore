@@ -13,6 +13,17 @@ ehthumbs.db
 # 기록 파일
 *.log
 
+# 비밀 값이 든 파일 — 절대 올리지 않는다 (API 키 등)
+.env
+.env.*
+!.env.example
+
+# 내려받은 동영상·음성 — 용량이 커서 올리지 않는다 (yt-dlp 로 다시 받으면 된다)
+*.mp4
+*.mp3
+*.webm
+*.m4a
+
 # 개발 도구가 만드는 폴더
 node_modules/
 __pycache__/
@@ -25,3 +36,4 @@ build/
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/recipe/
+!.claude/skills/youtube-summary/

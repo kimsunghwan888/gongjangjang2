@@ -41,22 +41,34 @@ file dish.jpg      # JPEG 인지 반드시 확인. HTML이면 실패한 것
 
 Read 도구로 사진을 눈으로 확인한 뒤 쓴다. 출처(파일명·촬영자·라이선스·Wikimedia Commons)를 문서와 페이지 양쪽에 남긴다.
 
-### 삽화가 필요할 때
+### 삽화가 필요할 때 — 나노바나나 (Gemini)
 
-`.claude/settings.local.json`의 `env.IMAGE_API_KEY`를 환경변수로 읽는다. 이 파일은 git에서 제외되어 있으니 **키를 다른 파일·커밋·아티팩트·화면 출력에 절대 옮기지 않는다.**
+키는 `.claude/settings.local.json`의 `env.GEMINI_API_KEY`에서 환경변수로 들어온다. 이 파일은 git 제외 대상이다. **키를 다른 파일·커밋·아티팩트·화면 출력으로 절대 옮기지 않는다.** `echo "$GEMINI_API_KEY"` 금지.
 
 ```bash
-if [ -n "$IMAGE_API_KEY" ]; then
-  # 키 있음 → 이미지 생성 API 호출. 키는 헤더로만 넘기고 echo 하지 않는다
-  curl -s -H "x-goog-api-key: $IMAGE_API_KEY" ...
+if [ -n "$GEMINI_API_KEY" ]; then
+  curl -s -X POST https://generativelanguage.googleapis.com/v1beta/interactions \
+    -H "x-goog-api-key: $GEMINI_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"gemini-3.1-flash-image","input":[{"type":"text","text":"<그림 설명>"}]}' \
+    -o gen.json
+  # 결과는 output_image.data 에 base64로 들어온다 → 아티팩트 data URI에 바로 쓸 수 있다
 else
-  # 키 없음 → SVG로 직접 그린다
+  # 키가 비어 있으면 SVG로 직접 그린다
 fi
 ```
 
-키가 비어 있으면 SVG로 직접 그린다. 저작권 있는 캐릭터는 그리지 않고 분위기만 살린다.
+| 모델 | 쓸 곳 |
+|---|---|
+| `gemini-3.1-flash-image` | 기본. 무료 한도 안에서 쓴다 |
+| `gemini-3.1-flash-lite-image` | 더 싸고 빠름 |
+| `gemini-3-pro-image` | 고급. **무료 한도 없음 — 쓰기 전에 사용자에게 묻는다** |
 
-> 아직 어느 서비스를 쓸지 정해지지 않았다. 사용자가 서비스를 알려주면 변수 이름(`IMAGE_API_KEY`)과 위 `curl` 헤더를 그 서비스에 맞게 바꾼다.
+무료 한도는 하루 500장 (2026-08 기준). 저작권 있는 캐릭터는 그리지 않고 분위기만 살린다.
+
+### 음악 — 수노AI
+
+수노는 **공식 API가 없다** (2026-08 기준, 파트너 한정 신청만 존재). 제3자 중개 업체는 권하지 않는다. 음악이 필요하면 사용자가 수노 웹사이트에서 직접 만들어 파일로 내려받은 것을 쓴다. `SUNO_API_KEY` 자리는 공식 API가 열릴 때를 대비해 비워둔 것이다.
 
 ## 3. 마크다운 저장
 
