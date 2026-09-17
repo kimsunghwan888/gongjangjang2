@@ -1,0 +1,15 @@
+{
+  "name": "postgres-memo-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PostgreSQL에 메모를 저장하는 메모장 앱",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.23.0"
+  }
+}
