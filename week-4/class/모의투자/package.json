@@ -1,0 +1,15 @@
+{
+  "name": "mock-invest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "업비트 공개 시세로 하는 모의투자 (가상 지갑 100만원, PostgreSQL 저장)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.23.0"
+  }
+}
