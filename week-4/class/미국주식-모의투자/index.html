@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>나의 미국주식 모의투자</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+
+    function Button({ children, variant = 'primary', size = 'md', disabled = false, onClick, className = '' }) {
+      const baseClass = 'font-semibold rounded-lg transition-colors';
+
+      const sizeClass = {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-4 py-2 text-base',
+        lg: 'px-6 py-3 text-lg'
+      }[size];
+
+      const variantClass = {
+        primary: disabled ? 'bg-gray-300 text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700',
+        secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300',
+        danger: disabled ? 'bg-gray-300 text-gray-500' : 'bg-red-500 text-white hover:bg-red-600'
+      }[variant];
+
+      return (
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className={`${baseClass} ${sizeClass} ${variantClass} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, type = 'text', value, onChange, placeholder, error }) {
+      return (
+        <div className="flex flex-col gap-1">
+          {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
+          <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            className={`px-3 py-2 border rounded-lg text-sm ${error ? 'border-red-500' : 'border-gray-300'}`}
+          />
+          {error && <span className="text-xs text-red-500">{error}</span>}
+        </div>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-white rounded-lg shadow-sm p-4 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function Badge({ children, color = 'gray' }) {
+      const colorClass = {
+        green: 'bg-green-100 text-green-800',
+        red: 'bg-red-100 text-red-800',
+        blue: 'bg-blue-100 text-blue-800',
+        gray: 'bg-gray-100 text-gray-800'
+      }[color];
+
+      return <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>{children}</span>;
+    }
+
+    // ========================================
+    // 💼 Mock Data & Utilities
+    // ========================================
+
+    const STOCKS = [
+      { symbol: 'TSLA', name: '테슬라', basePrice: 250 },
+      { symbol: 'GOOGL', name: '구글', basePrice: 140 },
+      { symbol: 'AAPL', name: '애플', basePrice: 190 },
+      { symbol: 'AMZN', name: '아마존', basePrice: 170 }
+    ];
+
+    // 주가에 작은 변동성 추가 (±5%)
+    function getStockPrice(basePrice) {
+      const variation = (Math.random() - 0.5) * 0.1; // -5% ~ +5%
+      return Math.round(basePrice * (1 + variation) * 100) / 100;
+    }
+
+    // ========================================
+    // 📄 Dashboard Page
+    // ========================================
+
+    function DashboardTab({ portfolio, cash, stocks }) {
+      const totalValue = Object.entries(portfolio).reduce((sum, [symbol, qty]) => {
+        const stock = STOCKS.find(s => s.symbol === symbol);
+        return sum + (qty * getStockPrice(stock.basePrice));
+      }, 0);
+
+      const totalAsset = cash + totalValue;
+
+      return (
+        <div className="space-y-4">
+          {/* 자산 요약 */}
+          <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-l-4 border-blue-500">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs text-gray-600 mb-1">현금</p>
+                <p className="text-2xl font-bold text-gray-800">${cash.toFixed(0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 mb-1">주식평가</p>
+                <p className="text-2xl font-bold text-gray-800">${totalValue.toFixed(0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600 mb-1">총 자산</p>
+                <p className="text-2xl font-bold text-blue-600">${totalAsset.toFixed(0)}</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* 보유 주식 */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">📈 보유 주식</h3>
+            <div className="space-y-2">
+              {STOCKS.map(stock => {
+                const quantity = portfolio[stock.symbol] || 0;
+                if (quantity === 0) return null;
+                const price = getStockPrice(stock.basePrice);
+                const value = quantity * price;
+
+                return (
+                  <Card key={stock.symbol} className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-gray-800">{stock.name} ({stock.symbol})</p>
+                      <p className="text-sm text-gray-600">{quantity}주 @ ${price.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-gray-800">${value.toFixed(0)}</p>
+                    </div>
+                  </Card>
+                );
+              })}
+              {Object.values(portfolio).every(q => q === 0) && (
+                <Card className="text-center text-gray-500">
+                  아직 보유 주식이 없습니다
+                </Card>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🔄 Trading Page
+    // ========================================
+
+    function TradingTab({ portfolio, cash, onTrade, stocks }) {
+      const [selectedSymbol, setSelectedSymbol] = useState('TSLA');
+      const [quantity, setQuantity] = useState('1');
+      const [error, setError] = useState('');
+
+      const selectedStock = STOCKS.find(s => s.symbol === selectedSymbol);
+      const currentPrice = getStockPrice(selectedStock.basePrice);
+      const totalCost = currentPrice * parseInt(quantity || 0);
+      const owned = portfolio[selectedSymbol] || 0;
+
+      const handleBuy = () => {
+        setError('');
+        if (!quantity || parseInt(quantity) <= 0) {
+          setError('수량을 입력해주세요');
+          return;
+        }
+        if (totalCost > cash) {
+          setError('잔액이 부족합니다');
+          return;
+        }
+        onTrade('buy', selectedSymbol, parseInt(quantity), currentPrice);
+        setQuantity('1');
+      };
+
+      const handleSell = () => {
+        setError('');
+        if (!quantity || parseInt(quantity) <= 0) {
+          setError('수량을 입력해주세요');
+          return;
+        }
+        if (parseInt(quantity) > owned) {
+          setError(`최대 ${owned}주까지 매도 가능합니다`);
+          return;
+        }
+        onTrade('sell', selectedSymbol, parseInt(quantity), currentPrice);
+        setQuantity('1');
+      };
+
+      return (
+        <div className="space-y-4">
+          <Card>
+            <h3 className="text-lg font-bold text-gray-800 mb-4">🔄 매매하기</h3>
+
+            {/* 종목 선택 */}
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-700 block mb-2">종목 선택</label>
+              <select
+                value={selectedSymbol}
+                onChange={(e) => setSelectedSymbol(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              >
+                {STOCKS.map(stock => (
+                  <option key={stock.symbol} value={stock.symbol}>
+                    {stock.name} ({stock.symbol})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 현재 주가 */}
+            <div className="bg-gray-50 p-3 rounded-lg mb-4">
+              <p className="text-xs text-gray-600">현재 주가</p>
+              <p className="text-2xl font-bold text-gray-800">${currentPrice.toFixed(2)}</p>
+            </div>
+
+            {/* 수량 입력 */}
+            <Input
+              label="구입/판매 수량"
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="1"
+              error={error}
+            />
+
+            {/* 거래 비용 */}
+            <div className="bg-gray-50 p-3 rounded-lg my-4">
+              <p className="text-xs text-gray-600">거래 금액</p>
+              <p className="text-xl font-bold text-gray-800">${totalCost.toFixed(2)}</p>
+              <p className="text-xs text-gray-600 mt-2">현금 잔액: ${cash.toFixed(0)}</p>
+            </div>
+
+            {/* 보유 주식 */}
+            <div className="bg-blue-50 p-3 rounded-lg mb-4">
+              <p className="text-xs text-gray-600">보유 중인 {selectedStock.name}</p>
+              <p className="text-lg font-bold text-blue-600">{owned}주</p>
+            </div>
+
+            {/* 매매 버튼 */}
+            <div className="flex gap-2">
+              <Button onClick={handleBuy} className="flex-1">
+                💚 매수
+              </Button>
+              <Button onClick={handleSell} variant="danger" className="flex-1" disabled={owned === 0}>
+                ❤️ 매도
+              </Button>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📊 History Page
+    // ========================================
+
+    function HistoryTab({ history }) {
+      return (
+        <div className="space-y-2">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">📋 거래 내역</h3>
+          {history.length === 0 ? (
+            <Card className="text-center text-gray-500">
+              거래 내역이 없습니다
+            </Card>
+          ) : (
+            history.slice().reverse().map((trade, index) => (
+              <Card key={index} className="flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-gray-800">
+                    {trade.type === 'buy' ? '💚 매수' : '❤️ 매도'} {trade.symbol}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {trade.quantity}주 @ ${trade.price.toFixed(2)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className={`font-bold ${trade.type === 'buy' ? 'text-red-600' : 'text-green-600'}`}>
+                    {trade.type === 'buy' ? '-' : '+'}${(trade.quantity * trade.price).toFixed(0)}
+                  </p>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+
+    function App() {
+      const [tab, setTab] = useState('dashboard');
+      const [cash, setCash] = useState(1000);
+      const [portfolio, setPortfolio] = useState({});
+      const [history, setHistory] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState('');
+
+      // 지갑 정보 조회
+      const loadWallet = async () => {
+        try {
+          const res = await fetch('/api/wallet');
+          const data = await res.json();
+          setCash(parseFloat(data.cash));
+          setPortfolio(data.stocks || {TSLA: 0, GOOGL: 0, AAPL: 0, AMZN: 0});
+          setLoading(false);
+        } catch (err) {
+          setError('지갑 정보를 불러올 수 없습니다');
+          setLoading(false);
+        }
+      };
+
+      // 거래 내역 조회
+      const loadOrders = async () => {
+        try {
+          const res = await fetch('/api/orders');
+          const data = await res.json();
+          setHistory(data.map(order => ({
+            type: order.type,
+            symbol: order.symbol,
+            quantity: order.quantity,
+            price: order.price,
+            timestamp: new Date(order.trade_timestamp).toLocaleString('ko-KR')
+          })));
+        } catch (err) {
+          console.error('Error loading orders:', err);
+        }
+      };
+
+      // 초기 로드
+      React.useEffect(() => {
+        loadWallet();
+        loadOrders();
+      }, []);
+
+      const handleTrade = async (type, symbol, quantity, price) => {
+        try {
+          const res = await fetch('/api/trade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, symbol, quantity, price })
+          });
+
+          if (!res.ok) {
+            const error = await res.json();
+            setError(error.error || '거래 실패');
+            return;
+          }
+
+          const data = await res.json();
+          setCash(parseFloat(data.cash));
+          setPortfolio(data.stocks || {TSLA: 0, GOOGL: 0, AAPL: 0, AMZN: 0});
+
+          // 거래 내역 다시 로드
+          loadOrders();
+          setTab('history');
+          setError('');
+        } catch (err) {
+          setError('거래 중 오류 발생: ' + err.message);
+        }
+      };
+
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-4xl mb-4">📊</div>
+              <p className="text-lg text-gray-600">데이터베이스를 연결 중입니다...</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+          {/* 에러 메시지 */}
+          {error && (
+            <div className="bg-red-100 border-l-4 border-red-500 p-4 mb-4">
+              <p className="text-red-700">⚠️ {error}</p>
+            </div>
+          )}
+
+          {/* Header */}
+          <header className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 shadow-lg">
+            <h1 className="text-3xl font-bold">📊 나의 미국주식 모의투자</h1>
+            <p className="text-blue-100 mt-1">테슬라 · 구글 · 애플 · 아마존</p>
+          </header>
+
+          {/* Tabs */}
+          <div className="bg-white border-b">
+            <div className="max-w-2xl mx-auto px-4 flex gap-2">
+              <button
+                onClick={() => setTab('dashboard')}
+                className={`px-4 py-3 font-semibold border-b-2 transition-colors ${
+                  tab === 'dashboard'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                📈 대시보드
+              </button>
+              <button
+                onClick={() => setTab('trading')}
+                className={`px-4 py-3 font-semibold border-b-2 transition-colors ${
+                  tab === 'trading'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                🔄 매매
+              </button>
+              <button
+                onClick={() => setTab('history')}
+                className={`px-4 py-3 font-semibold border-b-2 transition-colors ${
+                  tab === 'history'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                📋 거래내역
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <main className="max-w-2xl mx-auto p-4">
+            {tab === 'dashboard' && <DashboardTab portfolio={portfolio} cash={cash} stocks={STOCKS} />}
+            {tab === 'trading' && <TradingTab portfolio={portfolio} cash={cash} onTrade={handleTrade} stocks={STOCKS} />}
+            {tab === 'history' && <HistoryTab history={history} />}
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

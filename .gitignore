@@ -37,3 +37,9 @@ build/
 .claude/skills/*
 !.claude/skills/recipe/
 !.claude/skills/youtube-summary/
+
+# 홈페이지에 들어온 문의 — 개인정보라 올리지 않는다
+week-4/class/포켓몬-회사-홈페이지/문의함/
+
+# AI 로 만든 사진 — 용량이 커서 올리지 않는다
+week-3/quests/라이카-사진-생성기/사진첩/
