@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>일본주식 모의투자</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <!-- ⚠️ 모든 CDN은 버전을 고정한다. Babel은 반드시 7.x (8.x는 인라인 text/babel이 깨진다) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <style>
+    @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .animate-fade-up { animation: fade-up .25s ease-out both; }
+    @keyframes flash-up { 0% { background-color: rgba(239, 68, 68, .18); } 100% { background-color: transparent; } }
+    @keyframes flash-down { 0% { background-color: rgba(37, 99, 235, .18); } 100% { background-color: transparent; } }
+    .flash-up { animation: flash-up .6s ease-out; }
+    .flash-down { animation: flash-down .6s ease-out; }
+    /* 숫자가 바뀔 때 자리가 흔들리지 않게 */
+    .tnum { font-variant-numeric: tabular-nums; }
+    @media (prefers-reduced-motion: reduce) {
+      .animate-fade-up, .flash-up, .flash-down, .animate-spin { animation: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans antialiased">
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useEffect, useMemo, useCallback, useContext, createContext, useReducer, useRef, useId } = React;
+
+    const cx = (...classes) => classes.filter(Boolean).join(' ');
+
+    // ========================================
+    // 🔢 숫자 · 날짜 표시 도우미
+    // ========================================
+    // 한국 관례: 오르면 빨강, 내리면 파랑
+    const UP = 'text-red-600';
+    const DOWN = 'text-blue-600';
+    const tidy = (n) => (Math.abs(n) < 0.005 ? 0 : n);   // 0.0000001 같은 찌꺼기는 0으로 본다
+    const toneOf = (n) => (tidy(n) > 0 ? UP : tidy(n) < 0 ? DOWN : 'text-slate-500');
+    const toneOnDark = (n) => (tidy(n) > 0 ? 'text-red-400' : tidy(n) < 0 ? 'text-blue-400' : 'text-slate-300');   // 어두운 카드 위에서
+    const signMark = (n) => (tidy(n) > 0 ? '+' : tidy(n) < 0 ? '-' : '');
+
+    // 일본 주식 가격은 0.5엔 단위도 있어서 소수점 둘째 자리까지 (뒤의 0은 지운다)
+    const formatPrice = (value) => value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+    const formatYen = (value) => `${formatPrice(value)}엔`;
+    // 이익·손해처럼 +, - 를 꼭 보여줘야 하는 금액
+    const formatSignedYen = (value) => `${signMark(value)}${formatYen(Math.abs(value))}`;
+    const formatPercent = (value) => `${tidy(value) > 0 ? '+' : ''}${tidy(value).toFixed(2)}%`;
+    const formatShares = (value) => `${value.toLocaleString('ko-KR')}주`;
+
+    // 거래된 주식 수는 크게 줄여 보여준다 (2237만 주)
+    function formatVolume(value) {
+      if (value >= 1e8) return `${(value / 1e8).toFixed(1)}억 주`;
+      if (value >= 1e4) return `${Math.round(value / 1e4).toLocaleString('ko-KR')}만 주`;
+      return formatShares(value);
+    }
+
+    const formatTime = (iso) =>
+      new Date(iso).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    // 도쿄 시간으로 "9월 24일 14:26"
+    const formatTokyo = (iso) =>
+      new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Tokyo', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    const BUTTON_VARIANTS = {
+      primary: 'bg-slate-900 text-white hover:bg-slate-800 focus-visible:ring-slate-400',
+      secondary: 'bg-white text-slate-800 border-2 border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-300',
+      buy: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-300',
+      sell: 'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-300',
+      ghost: 'bg-transparent text-slate-700 hover:bg-slate-200/70 focus-visible:ring-slate-300',
+    };
+
+    const BUTTON_SIZES = {
+      sm: 'min-h-[44px] px-4 text-base',
+      md: 'min-h-[52px] px-5 text-lg',
+      lg: 'min-h-[60px] px-7 text-xl',
+    };
+
+    function Button({ variant = 'primary', size = 'md', type = 'button', disabled = false, className = '', children, ...rest }) {
+      return (
+        <button
+          type={type}
+          disabled={disabled}
+          className={cx(
+            'inline-flex items-center justify-center gap-2 rounded-2xl font-bold transition',
+            'focus:outline-none focus-visible:ring-4 disabled:opacity-40 disabled:cursor-not-allowed',
+            BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className
+          )}
+          {...rest}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Input({ label, hint, type = 'text', value, onChange, placeholder, error, disabled = false, suffix, className = '', ...rest }) {
+      const id = useId();
+      return (
+        <div className={className}>
+          {label && <label htmlFor={id} className="mb-2 block text-lg font-bold text-slate-800">{label}</label>}
+          <div className="relative">
+            <input
+              id={id}
+              type={type}
+              value={value}
+              onChange={onChange}
+              placeholder={placeholder}
+              disabled={disabled}
+              aria-invalid={!!error}
+              aria-describedby={error ? `${id}-error` : undefined}
+              className={cx(
+                'tnum w-full min-h-[56px] rounded-xl border-2 bg-white px-4 text-right text-xl font-bold',
+                'placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-4 disabled:bg-slate-100',
+                suffix && 'pr-16',
+                error ? 'border-red-400 focus:ring-red-100' : 'border-slate-300 focus:border-slate-500 focus:ring-slate-200'
+              )}
+              {...rest}
+            />
+            {suffix && (
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-lg font-bold text-slate-500">{suffix}</span>
+            )}
+          </div>
+          {hint && !error && <p className="mt-2 text-base text-slate-500">{hint}</p>}
+          {error && <p id={`${id}-error`} role="alert" className="mt-2 text-base font-semibold text-red-600">{error}</p>}
+        </div>
+      );
+    }
+
+    // 색·여백은 className 대신 tone·padding 으로 고른다 (같은 종류 클래스가 겹치면 어느 쪽이 이길지 모름)
+    const CARD_TONES = {
+      default: 'border-slate-200 bg-white',
+      dark: 'border-slate-800 bg-slate-900 text-white',
+      warn: 'border-amber-200 bg-amber-50',
+    };
+    const CARD_PADDINGS = { none: '', sm: 'p-4', md: 'p-5 sm:p-6' };
+
+    function Card({ tone = 'default', padding = 'md', className = '', children, ...rest }) {
+      return (
+        <div className={cx('rounded-3xl border shadow-sm', CARD_TONES[tone], CARD_PADDINGS[padding], className)} {...rest}>
+          {children}
+        </div>
+      );
+    }
+
+    const BADGE_COLORS = {
+      gray: 'bg-slate-100 text-slate-700',
+      red: 'bg-red-100 text-red-700',
+      blue: 'bg-blue-100 text-blue-700',
+      amber: 'bg-amber-100 text-amber-800',
+      green: 'bg-emerald-100 text-emerald-800',
+    };
+
+    function Badge({ color = 'gray', className = '', children }) {
+      return (
+        <span className={cx('inline-flex items-center gap-1 rounded-full px-3 py-1 text-base font-bold', BADGE_COLORS[color], className)}>
+          {children}
+        </span>
+      );
+    }
+
+    function Chip({ selected = false, onClick, className = '', children }) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          aria-pressed={selected}
+          className={cx(
+            'min-h-[48px] rounded-full border-2 px-4 text-lg font-bold transition',
+            'focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-300',
+            selected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
+            className
+          )}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function OptionGroup({ label, options, value, onChange, className = '' }) {
+      return (
+        <fieldset className={className}>
+          {label && <legend className="mb-3 text-lg font-bold text-slate-800">{label}</legend>}
+          <div className="flex flex-wrap gap-2">
+            {options.map((o) => (
+              <Chip key={o.value} selected={value === o.value} onClick={() => onChange(o.value)}>{o.label}</Chip>
+            ))}
+          </div>
+        </fieldset>
+      );
+    }
+
+    const MODAL_SIZES = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' };
+
+    function Modal({ isOpen, onClose, title, size = 'md', children }) {
+      const panelRef = useRef(null);
+      const onCloseRef = useRef(onClose);
+      const titleId = useId();
+      onCloseRef.current = onClose;
+
+      useEffect(() => {
+        if (!isOpen) return;
+        const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current(); };
+        document.addEventListener('keydown', onKey);
+        document.body.style.overflow = 'hidden';
+        if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus();
+        return () => {
+          document.removeEventListener('keydown', onKey);
+          document.body.style.overflow = '';
+        };
+      }, [isOpen]);
+
+      if (!isOpen) return null;
+
+      return (
+        // !m-0: 부모의 space-y 간격이 붙어 화면 위쪽이 비는 것을 막는다
+        <div className="fixed inset-0 z-50 !m-0 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4" onClick={onClose}>
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+            className={cx('animate-fade-up max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 shadow-xl focus:outline-none sm:rounded-3xl', MODAL_SIZES[size])}
+          >
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <h2 id={titleId} className="text-2xl font-extrabold">{title}</h2>
+              <button type="button" onClick={onClose} aria-label="닫기"
+                className="flex h-12 w-12 items-center justify-center rounded-full text-3xl text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-200">
+                ×
+              </button>
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function Spinner({ className = '' }) {
+      return (
+        <span role="status" aria-label="불러오는 중"
+          className={cx('inline-block h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-800', className)} />
+      );
+    }
+
+    function EmptyState({ emoji, title, description, action }) {
+      return (
+        <div className="flex flex-col items-center rounded-3xl border-2 border-dashed border-slate-300 bg-white/70 px-6 py-12 text-center">
+          <div className="mb-3 text-6xl" aria-hidden="true">{emoji}</div>
+          <p className="text-xl font-bold text-slate-800">{title}</p>
+          {description && <p className="mt-2 text-lg text-slate-600">{description}</p>}
+          {action && <div className="mt-6">{action}</div>}
+        </div>
+      );
+    }
+
+    function Toast({ message }) {
+      if (!message) return null;
+      return (
+        <div className="pointer-events-none fixed inset-x-0 top-4 z-[60] flex justify-center px-4">
+          <div role="status" aria-live="polite"
+            className="animate-fade-up w-full max-w-md rounded-2xl bg-slate-900 px-5 py-4 text-center text-lg font-semibold text-white shadow-lg">
+            {message}
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🔀 Router Components (/#/, /#/stock/:code, /#/wallet, /#/history)
+    // ========================================
+    const RouterContext = createContext(null);
+    const ParamsContext = createContext({});
+
+    const getHashPath = () => window.location.hash.replace(/^#/, '') || '/';
+
+    function Router({ children }) {
+      const [path, setPath] = useState(getHashPath);
+
+      useEffect(() => {
+        const onChange = () => { setPath(getHashPath()); window.scrollTo(0, 0); };
+        window.addEventListener('hashchange', onChange);
+        return () => window.removeEventListener('hashchange', onChange);
+      }, []);
+
+      const navigate = useCallback((to) => { window.location.hash = to; }, []);
+
+      return <RouterContext.Provider value={{ path, navigate }}>{children}</RouterContext.Provider>;
+    }
+
+    const useRouter = () => useContext(RouterContext);
+    const useParams = () => useContext(ParamsContext);
+
+    function matchRoute(pattern, path) {
+      const want = pattern.split('/').filter(Boolean);
+      const got = path.split('/').filter(Boolean);
+      if (want.length !== got.length) return null;
+      const params = {};
+      for (let i = 0; i < want.length; i++) {
+        if (want[i].startsWith(':')) params[want[i].slice(1)] = decodeURIComponent(got[i]);
+        else if (want[i] !== got[i]) return null;
+      }
+      return params;
+    }
+
+    function Route() { return null; }
+
+    function Routes({ children }) {
+      const { path } = useRouter();
+      const routes = React.Children.toArray(children);
+      for (const route of routes) {
+        if (route.props.path === '*') continue;
+        const params = matchRoute(route.props.path, path);
+        if (params) return <ParamsContext.Provider value={params}>{route.props.element}</ParamsContext.Provider>;
+      }
+      const fallback = routes.find((r) => r.props.path === '*');
+      return fallback ? fallback.props.element : null;
+    }
+
+    function Link({ to, className = '', children, ...rest }) {
+      return <a href={`#${to}`} className={className} {...rest}>{children}</a>;
+    }
+
+    // ========================================
+    // 📈 진짜 일본주식 시세 (우리 서버가 야후 파이낸스에서 받아다 준다)
+    // ========================================
+    const TICK_MS = 20000;           // 20초마다 새 시세를 받아 온다
+
+    // 서버에 말을 거는 공통 함수 (잘 되면 data 만 돌려주고, 아니면 이유를 알려 준다)
+    async function api(path, options) {
+      let res;
+      try {
+        res = await fetch(path, { headers: { 'content-type': 'application/json' }, ...options });
+      } catch {
+        throw new Error('서버에 연결하지 못했어요. 서버가 켜져 있는지 확인해 주세요.');
+      }
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body || !body.success) throw new Error((body && body.message) || '서버에 문제가 생겼어요.');
+      return body.data;
+    }
+
+    const MarketContext = createContext(null);
+
+    function MarketProvider({ children }) {
+      const [stocks, setStocks] = useState([]);
+      const [market, setMarket] = useState({ state: 'closed' });   // 도쿄 증권거래소가 열려 있나
+      const [updatedAt, setUpdatedAt] = useState(null);
+      const [error, setError] = useState('');
+
+      const load = useCallback(async () => {
+        try {
+          const data = await api('/api/markets');
+          setStocks(data.stocks);
+          setMarket(data.market);
+          setUpdatedAt(new Date());
+          setError('');
+        } catch (err) {
+          setError(err.message);   // 실패해도 마지막으로 받은 시세는 그대로 둔다
+        }
+      }, []);
+
+      useEffect(() => {
+        load();
+        // 다른 창을 보고 있을 땐 쉰다
+        const timer = setInterval(() => { if (!document.hidden) load(); }, TICK_MS);
+        return () => clearInterval(timer);
+      }, [load]);
+
+      const priceMap = useMemo(() => Object.fromEntries(stocks.map((s) => [s.code, s])), [stocks]);
+      const value = useMemo(() => ({ stocks, priceMap, market, updatedAt, error, reload: load }),
+        [stocks, priceMap, market, updatedAt, error, load]);
+      return <MarketContext.Provider value={value}>{children}</MarketContext.Provider>;
+    }
+
+    const useMarkets = () => useContext(MarketContext);
+
+    // ========================================
+    // 💰 내 지갑 (서버를 거쳐 Supabase 저장창고에 저장된다)
+    // ========================================
+    const START_CASH = 1000000;   // 시작 현금 100만엔
+
+    const WalletContext = createContext(null);
+
+    // 서버가 주는 모양을 화면이 쓰는 모양으로 바꾼다
+    const toHoldingMap = (list) =>
+      Object.fromEntries((list || []).map((h) => [h.code, { qty: h.qty, avgPrice: h.avgPrice }]));
+    const toTrade = (order) => ({ ...order, at: order.createdAt });
+
+    const initialWallet = {
+      cash: 0,
+      holdings: {},  // { '7203': { qty, avgPrice } }
+      trades: [],    // 거래 기록 (새 것이 앞)
+      ready: false,  // 서버에서 지갑을 받아왔는가
+      error: '',
+      toast: '',
+    };
+
+    function walletReducer(state, action) {
+      switch (action.type) {
+        // 서버가 준 지갑으로 화면을 맞춘다 (계산은 모두 서버가 했다)
+        case 'SET_WALLET':
+          return { ...state, cash: action.wallet.cash, holdings: toHoldingMap(action.wallet.holdings), ready: true, error: '' };
+        case 'SET_TRADES':
+          return { ...state, trades: action.trades };
+        case 'ADD_TRADE':
+          return { ...state, trades: [action.trade, ...state.trades] };
+        case 'SET_ERROR':
+          return { ...state, error: action.message };
+        case 'SHOW_TOAST':
+          return { ...state, toast: action.message };
+        case 'HIDE_TOAST':
+          return { ...state, toast: '' };
+        default:
+          return state;
+      }
+    }
+
+    function WalletProvider({ children }) {
+      const [wallet, dispatch] = useReducer(walletReducer, initialWallet);
+      const showToast = useCallback((message) => dispatch({ type: 'SHOW_TOAST', message }), []);
+
+      // 서버에서 지갑과 거래내역을 받아 온다
+      const load = useCallback(async () => {
+        try {
+          const [walletData, orders] = await Promise.all([api('/api/wallet'), api('/api/orders?limit=200')]);
+          dispatch({ type: 'SET_WALLET', wallet: walletData });
+          dispatch({ type: 'SET_TRADES', trades: orders.map(toTrade) });
+        } catch (err) {
+          dispatch({ type: 'SET_ERROR', message: err.message });
+        }
+      }, []);
+
+      useEffect(() => { load(); }, [load]);
+
+      const actions = useMemo(() => {
+        // 몇 주를 살지·팔지만 보내고, 가격 정하기·계산·저장은 서버가 한다
+        const trade = async (stock, side, qty) => {
+          const data = await api('/api/order', { method: 'POST', body: JSON.stringify({ code: stock.code, side, qty }) });
+          dispatch({ type: 'SET_WALLET', wallet: data.wallet });
+          dispatch({ type: 'ADD_TRADE', trade: toTrade(data.order) });
+          showToast(`${side === 'buy' ? '🔴' : '🔵'} ${stock.name} ${formatShares(data.order.qty)}를 ${side === 'buy' ? '샀어요' : '팔았어요'}`);
+        };
+        return {
+          buy: (stock, qty) => trade(stock, 'buy', qty),
+          sell: (stock, qty) => trade(stock, 'sell', qty),
+          reset: async () => {
+            const data = await api('/api/wallet/reset', { method: 'POST' });
+            dispatch({ type: 'SET_WALLET', wallet: data });
+            dispatch({ type: 'SET_TRADES', trades: [] });
+            showToast('🔄 지갑을 100만엔으로 되돌렸어요');
+          },
+          reload: load,
+        };
+      }, [showToast, load]);
+
+      const value = useMemo(() => ({ wallet, dispatch, showToast, actions }), [wallet, showToast, actions]);
+      return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
+    }
+
+    const useWallet = () => useContext(WalletContext);
+
+    // 보유 주식 + 현재 시세로 평가금액·수익을 계산한다
+    function usePortfolio() {
+      const { wallet } = useWallet();
+      const { priceMap } = useMarkets();
+
+      return useMemo(() => {
+        const items = Object.entries(wallet.holdings).map(([code, held]) => {
+          const stock = priceMap[code];
+          const price = stock ? stock.price : held.avgPrice;
+          const value = held.qty * price;
+          const cost = held.qty * held.avgPrice;
+          return {
+            code, stock, qty: held.qty, avgPrice: held.avgPrice, price, value, cost,
+            profit: value - cost,
+            profitRate: cost > 0 ? ((value - cost) / cost) * 100 : 0,
+          };
+        }).sort((a, b) => b.value - a.value);
+
+        const stockValue = items.reduce((sum, i) => sum + i.value, 0);
+        const total = wallet.cash + stockValue;
+        return {
+          items,
+          stockValue,
+          total,
+          profit: total - START_CASH,
+          profitRate: ((total - START_CASH) / START_CASH) * 100,
+        };
+      }, [wallet.holdings, wallet.cash, priceMap]);
+    }
+
+    // ========================================
+    // 🧩 Common / Layout Components
+    // ========================================
+    const NAV_ITEMS = [
+      { to: '/', label: '홈', short: '홈', emoji: '🏠' },
+      { to: '/wallet', label: '내 지갑', short: '지갑', emoji: '💰' },
+      { to: '/history', label: '거래내역', short: '내역', emoji: '🧾' },
+    ];
+
+    function isActive(path, to) {
+      if (to === '/') return path === '/' || path.startsWith('/stock/');
+      return path.startsWith(to);
+    }
+
+    function Header() {
+      const { path } = useRouter();
+      const { total, profitRate } = usePortfolio();
+
+      return (
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
+            <Link to="/" className="flex min-h-[48px] items-center gap-2 rounded-xl text-xl font-extrabold focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-200 sm:text-2xl">
+              <span aria-hidden="true">🗾</span> 일본주식 모의투자
+            </Link>
+
+            <div className="flex items-center gap-4">
+              <p className="hidden text-right sm:block">
+                <span className="block text-sm font-semibold text-slate-500">내 총 자산</span>
+                <span className="tnum block text-lg font-extrabold">
+                  {formatYen(total)} <span className={toneOf(profitRate)}>({formatPercent(profitRate)})</span>
+                </span>
+              </p>
+              <nav aria-label="주 메뉴" className="hidden md:block">
+                <ul className="flex gap-1">
+                  {NAV_ITEMS.map((item) => {
+                    const active = isActive(path, item.to);
+                    return (
+                      <li key={item.to}>
+                        <Link to={item.to} aria-current={active ? 'page' : undefined}
+                          className={cx(
+                            'flex min-h-[48px] items-center gap-2 rounded-2xl px-4 text-lg font-bold transition',
+                            'focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-200',
+                            active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                          )}>
+                          <span aria-hidden="true">{item.emoji}</span>{item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    function BottomNav() {
+      const { path } = useRouter();
+      return (
+        <nav aria-label="아래 메뉴" className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white md:hidden"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <ul className="grid grid-cols-3">
+            {NAV_ITEMS.map((item) => {
+              const active = isActive(path, item.to);
+              return (
+                <li key={item.to}>
+                  <Link to={item.to} aria-current={active ? 'page' : undefined}
+                    className={cx('flex min-h-[68px] flex-col items-center justify-center gap-0.5 text-base font-bold',
+                      active ? 'text-slate-900' : 'text-slate-400')}>
+                    <span aria-hidden="true" className="text-2xl">{item.emoji}</span>
+                    {item.short}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      );
+    }
+
+    function ToastHost() {
+      const { wallet, dispatch } = useWallet();
+      useEffect(() => {
+        if (!wallet.toast) return;
+        const timer = setTimeout(() => dispatch({ type: 'HIDE_TOAST' }), 2500);
+        return () => clearTimeout(timer);
+      }, [wallet.toast, dispatch]);
+      return <Toast message={wallet.toast} />;
+    }
+
+    function PageHeader({ title, description, action }) {
+      return (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold sm:text-4xl">{title}</h1>
+            {description && <p className="mt-2 text-lg text-slate-600">{description}</p>}
+          </div>
+          {action}
+        </div>
+      );
+    }
+
+    // 값이 바뀔 때 빨강·파랑으로 잠깐 반짝인다
+    function PriceFlash({ value, className = '', children }) {
+      const previous = useRef(value);
+      const [flash, setFlash] = useState({ dir: 0, nonce: 0 });
+
+      useEffect(() => {
+        if (value !== previous.current) {
+          const dir = value > previous.current ? 1 : -1;
+          setFlash((f) => ({ dir, nonce: f.nonce + 1 }));
+          previous.current = value;
+        }
+      }, [value]);
+
+      return (
+        <span key={flash.nonce} className={cx('rounded px-1', flash.dir > 0 ? 'flash-up' : flash.dir < 0 ? 'flash-down' : '', className)}>
+          {children}
+        </span>
+      );
+    }
+
+    // 작은 흐름 그래프 (목록용) · 큰 그래프 (상세용) 둘 다 이걸 쓴다
+    function LineChart({ values, up, className = '', showArea = false }) {
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = max - min;
+      const points = values.map((v, i) => {
+        const x = (i / (values.length - 1)) * 100;
+        const y = span === 0 ? 50 : 100 - ((v - min) / span) * 100;   // 값이 모두 같으면 가운데 직선
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      });
+      const color = up ? '#dc2626' : '#2563eb';
+
+      return (
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" className={className}>
+          {showArea && (
+            <polygon points={`0,100 ${points.join(' ')} 100,100`} fill={color} opacity="0.12" />
+          )}
+          <polyline points={points.join(' ')} fill="none" stroke={color} strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+      );
+    }
+
+    // 📊 종목 상세 그래프 (오늘 · 3개월 · 1년 · 5년을 탭으로 바꿔 본다)
+    const CHART_TABS = [
+      { value: 'today',  label: '오늘',  hint: '오늘 하루 · 한 칸이 5분 (장이 닫혀 있으면 마지막으로 열렸던 날)' },
+      { value: 'months3', label: '3개월', hint: '한 칸이 하루' },
+      { value: 'year1',  label: '1년',   hint: '한 칸이 일주일' },
+      { value: 'year5',  label: '5년',   hint: '한 칸이 한 달' },
+    ];
+
+    // '2026-09-21T00:00:00' → '2026년 9월' 또는 '2026년 9월 21일'
+    function formatCandleDay(text, withDay) {
+      const d = new Date(text);
+      const base = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+      return withDay ? `${base} ${d.getDate()}일` : base;
+    }
+
+    function StockChart({ stock }) {
+      const [tab, setTab] = useState('today');
+      const [charts, setCharts] = useState({});   // 받아 둔 그래프 { months3: [...], year1: [...] }
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+      const [retry, setRetry] = useState(0);      // '다시 해 보기' 를 누른 횟수
+
+      // 다른 종목으로 가면 '오늘' 탭부터 다시 본다
+      useEffect(() => { setTab('today'); setCharts({}); setError(''); }, [stock.code]);
+
+      // '오늘'은 시세 목록이 이미 갖고 있다. 나머지는 그 탭을 처음 누를 때 한 번만 받아 온다
+      useEffect(() => {
+        if (tab === 'today' || charts[tab]) return;
+        let alive = true;                         // 화면을 떠난 뒤에는 고치지 않는다
+        setLoading(true);
+        setError('');
+        api(`/api/chart?code=${stock.code}&kind=${tab}`)
+          .then((data) => { if (alive) setCharts((prev) => ({ ...prev, [tab]: data.candles })); })
+          .catch((err) => { if (alive) setError(err.message); })
+          .finally(() => { if (alive) setLoading(false); });
+        return () => { alive = false; };
+      }, [tab, stock.code, charts, retry]);
+
+      const candles = charts[tab] || [];
+      const values = tab === 'today' ? stock.spark : candles.map((c) => c.price);
+      const hint = CHART_TABS.find((t) => t.value === tab).hint;
+      const ready = values.length > 1;
+      const up = ready ? values[values.length - 1] >= values[0] : true;   // 기간 전체로 올랐나
+      const withDay = tab !== 'year5';                                    // 5년은 날짜 없이 '몇 년 몇 월'
+
+      return (
+        <div className="mt-5">
+          <OptionGroup label="그래프" options={CHART_TABS} value={tab} onChange={setTab} />
+
+          <div className="mt-4">
+            {error ? (
+              <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-300 px-4 text-center">
+                <p className="text-lg text-slate-600">{error}</p>
+                <Button variant="secondary" onClick={() => setRetry((n) => n + 1)}>다시 해 보기</Button>
+              </div>
+            ) : loading || (tab !== 'today' && !charts[tab]) ? (
+              <div className="flex h-48 items-center justify-center rounded-2xl bg-slate-50">
+                <Spinner />
+              </div>
+            ) : !ready ? (
+              <div className="flex h-48 items-center justify-center rounded-2xl bg-slate-50 px-4 text-center text-lg text-slate-500">
+                아직 그릴 만큼 가격이 모이지 않았어요.
+              </div>
+            ) : (
+              <div className="relative">
+                <LineChart values={values} up={up} showArea className="h-48 w-full" />
+                <span className="tnum absolute left-2 top-1 rounded bg-white/85 px-2 text-base font-bold text-slate-600">
+                  맨 위 {formatPrice(Math.max(...values))}엔
+                </span>
+                <span className="tnum absolute bottom-1 left-2 rounded bg-white/85 px-2 text-base font-bold text-slate-600">
+                  맨 아래 {formatPrice(Math.min(...values))}엔
+                </span>
+              </div>
+            )}
+          </div>
+
+          <p className="mt-2 text-base text-slate-500">{hint}</p>
+          {tab !== 'today' && ready && !loading && candles.length > 0 && (
+            <p className="tnum mt-1 text-base text-slate-500">
+              {formatCandleDay(candles[0].t, withDay)} ~ {formatCandleDay(candles[candles.length - 1].t, withDay)}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    // 종목을 고르는 칸 (누르면 ① 현재가 · ③ 사기·팔기가 그 종목으로 바뀐다)
+    function StockTile({ stock, selected, onSelect }) {
+      return (
+        <button
+          type="button"
+          onClick={() => onSelect(stock.code)}
+          aria-pressed={selected}
+          className={cx(
+            'flex w-full flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition',
+            'focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-300',
+            selected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:border-slate-400'
+          )}
+        >
+          <span className="flex flex-wrap items-center gap-x-2 text-lg font-bold leading-tight">
+            <span aria-hidden="true" className="text-2xl">{stock.emoji}</span>
+            {stock.name}
+          </span>
+          <span className="tnum text-lg font-extrabold">{formatPrice(stock.price)}엔</span>
+          <span className={cx('tnum text-base font-bold', selected ? toneOnDark(stock.changeRate) : toneOf(stock.changeRate))}>
+            {formatPercent(stock.changeRate)}
+          </span>
+        </button>
+      );
+    }
+
+    function StatCard({ label, value, sub, tone = 'default' }) {
+      return (
+        <Card padding="sm" tone={tone}>
+          <p className={cx('text-base font-semibold', tone === 'dark' ? 'text-slate-300' : 'text-slate-500')}>{label}</p>
+          <p className="tnum mt-1 text-2xl font-extrabold">{value}</p>
+          {sub && <p className="tnum mt-1 text-base font-bold">{sub}</p>}
+        </Card>
+      );
+    }
+
+    // 도쿄 증권거래소가 열려 있는지 알려 주는 안내
+    const MARKET_NOTES = {
+      open:   { color: 'green', title: '🟢 지금 장이 열려 있어요', text: '(도쿄 9:00~15:30) 시세는 약 20분 늦게 와요.' },
+      lunch:  { color: 'amber', title: '🟡 점심시간이에요', text: '(11:30~12:30) 12시 30분에 다시 열려요. 그동안은 마지막 가격으로 거래돼요.' },
+      closed: { color: 'gray',  title: '⚫ 지금은 장이 닫혀 있어요', text: '마지막 가격(종가)으로 연습할 수 있어요. 평일 오전 9시(도쿄)에 다시 열려요.' },
+    };
+
+    function MarketNote({ state }) {
+      const note = MARKET_NOTES[state] || MARKET_NOTES.closed;
+      return (
+        <p className="text-lg text-slate-700">
+          <Badge color={note.color} className="mr-2">{note.title}</Badge>
+          {note.text}
+        </p>
+      );
+    }
+
+    // 화면 위에 "① 현재가" 처럼 순서를 알려 주는 제목
+    function StepTitle({ id, n, title, hint, action }) {
+      return (
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 id={id} className="flex items-center gap-2 text-2xl font-extrabold">
+              <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-lg text-white">{n}</span>
+              {title}
+            </h2>
+            {hint && <p className="mt-1 text-lg text-slate-600">{hint}</p>}
+          </div>
+          {action}
+        </div>
+      );
+    }
+
+    // 내 지갑 : 총 자산 · 수익률 · 쓸 수 있는 돈(현금)
+    function WalletCard() {
+      const { wallet } = useWallet();
+      const { stockValue, total, profit, profitRate } = usePortfolio();
+      return (
+        <Card tone="dark">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3">
+            <div className="col-span-2 sm:col-span-1">
+              <p className="text-base font-semibold text-slate-300">내 총 자산</p>
+              <p className="tnum mt-1 text-3xl font-extrabold">{formatYen(total)}</p>
+              <p className="tnum mt-1 text-base text-slate-300">그중 주식 {formatYen(stockValue)}</p>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-slate-300">수익률</p>
+              <p className={cx('tnum mt-1 whitespace-nowrap text-xl font-extrabold sm:text-3xl', toneOnDark(profit))}>{formatPercent(profitRate)}</p>
+              <p className={cx('tnum mt-1 text-base font-bold', toneOnDark(profit))}>{formatSignedYen(profit)}</p>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-slate-300">현금 <span className="font-normal">(쓸 수 있는 돈)</span></p>
+              <p className="tnum mt-1 whitespace-nowrap text-xl font-extrabold sm:text-3xl">{formatYen(wallet.cash)}</p>
+              <p className="tnum mt-1 text-base text-slate-300">시작 {formatYen(START_CASH)}</p>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // 주문내역의 한 건
+    function TradeItem({ trade }) {
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-3">
+              <Badge color={trade.side === 'buy' ? 'red' : 'blue'}>{trade.side === 'buy' ? '샀어요' : '팔았어요'}</Badge>
+              <span className="text-xl font-bold">{trade.name}</span>
+            </span>
+            <span className="tnum text-xl font-extrabold">{formatYen(trade.amount)}</span>
+          </div>
+          <p className="tnum mt-2 text-base text-slate-500">
+            {formatShares(trade.qty)} × {formatPrice(trade.price)}엔 · {formatTime(trade.at)}
+          </p>
+          {trade.side === 'sell' && trade.profit !== null && (
+            <p className={cx('tnum mt-1 text-lg font-bold', toneOf(trade.profit))}>
+              이번에 {trade.profit >= 0 ? '번' : '잃은'} 돈 {formatSignedYen(trade.profit)}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📄 Page Components
+    // ========================================
+    let lastPickedCode = null;   // 다른 화면에 다녀와도 고른 종목을 기억한다
+
+    // 첫 화면: ① 현재가 → ② 내 지갑 → ③ 사기·팔기 → ④ 주문내역 이 위에서 아래로 차례대로 보인다
+    function HomePage() {
+      const { stocks, priceMap, market, updatedAt, reload, error: marketError } = useMarkets();
+      const { wallet } = useWallet();
+      const [picked, setPicked] = useState(lastPickedCode);
+      const [order, setOrder] = useState(null); // 'buy' | 'sell' | null
+      const closeOrder = useCallback(() => setOrder(null), []);
+
+      const stock = priceMap[picked] || stocks[0];   // 고른 종목이 없으면 맨 위 종목
+      const held = wallet.holdings[stock.code];
+      const profit = held ? held.qty * (stock.price - held.avgPrice) : 0;
+      const profitRate = held && held.avgPrice > 0 ? ((stock.price - held.avgPrice) / held.avgPrice) * 100 : 0;
+      const recent = wallet.trades.slice(0, 5);
+
+      const pick = (code) => { lastPickedCode = code; setPicked(code); };
+
+      return (
+        <div className="mx-auto max-w-3xl space-y-10">
+          {/* ① 현재가 */}
+          <section aria-labelledby="step-price" className="space-y-4">
+            <StepTitle id="step-price" n="1" title="현재가" hint="종목을 누르면 아래 ③ 사기·팔기도 그 종목으로 바뀌어요." />
+            <MarketNote state={market.state} />
+
+            {marketError && (
+              <Card tone="warn" padding="sm">
+                <p className="text-lg text-amber-900">
+                  ⚠️ 새 시세를 받지 못했어요 ({marketError}) — 아래 값은 마지막으로 받은 시세예요.
+                </p>
+              </Card>
+            )}
+
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {stocks.map((s) => (
+                <li key={s.code} className="flex"><StockTile stock={s} selected={s.code === stock.code} onSelect={pick} /></li>
+              ))}
+            </ul>
+
+            <Card>
+              <div className="flex items-center gap-4">
+                <span aria-hidden="true" className="text-5xl">{stock.emoji}</span>
+                <div>
+                  <h3 className="text-2xl font-extrabold">{stock.name}</h3>
+                  <p className="text-lg text-slate-500">{stock.code} · {stock.sub}</p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <PriceFlash value={stock.price} className={cx('tnum text-4xl font-extrabold', toneOf(stock.changeRate))}>
+                  {formatYen(stock.price)}
+                </PriceFlash>
+                <p className={cx('tnum mt-2 break-keep text-xl font-bold', toneOf(stock.changeRate))}>
+                  {formatPercent(stock.changeRate)} ({signMark(stock.change)}{formatYen(Math.abs(stock.change))}) · 어제 마감가 대비
+                </p>
+                <p className="tnum mt-1 text-base text-slate-500">
+                  {formatTokyo(stock.at)} 기준 (도쿄 시간){market.state === 'closed' && ' · 장이 닫혀서 마지막 가격이에요'}
+                </p>
+              </div>
+              {stock.spark.length > 1 && (
+                <div className="mt-4">
+                  <LineChart values={stock.spark} up={stock.changeRate >= 0} showArea className="h-32 w-full" />
+                  <p className="mt-2 text-base text-slate-500">오늘 하루 흐름 · 한 칸이 5분</p>
+                </div>
+              )}
+              <Link to={`/stock/${stock.code}`} className="mt-3 inline-flex min-h-[48px] items-center text-lg font-bold text-slate-700 underline underline-offset-4 focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-300">
+                그래프 더 보기 (3개월 · 1년 · 5년) →
+              </Link>
+            </Card>
+          </section>
+
+          {/* ② 내 지갑 */}
+          <section aria-labelledby="step-wallet" className="space-y-4">
+            <StepTitle id="step-wallet" n="2" title="내 지갑" hint="가짜 돈 100만엔이 지금 얼마인지 보여줘요."
+              action={<Link to="/wallet" className="min-h-[44px] shrink-0 py-2 text-lg font-bold text-slate-700 underline underline-offset-4">자세히 →</Link>} />
+            <WalletCard />
+          </section>
+
+          {/* ③ 사기 · 팔기 */}
+          <section aria-labelledby="step-order" className="space-y-4">
+            <StepTitle id="step-order" n="3" title="사기 · 팔기" hint="버튼을 누르면 몇 주인지 적는 창이 열려요." />
+            <Card>
+              <div className="flex items-center gap-4">
+                <span aria-hidden="true" className="text-4xl">{stock.emoji}</span>
+                <div>
+                  <p className="text-xl font-extrabold">{stock.name}</p>
+                  <p className="tnum text-lg text-slate-600">1주 {formatYen(stock.price)}</p>
+                </div>
+              </div>
+              <p className="tnum mt-4 text-lg text-slate-700">
+                {held ? (
+                  <>가진 주식 <strong>{formatShares(held.qty)}</strong> · 벌거나 잃은 돈{' '}
+                    <strong className={toneOf(profit)}>{formatSignedYen(profit)} ({formatPercent(profitRate)})</strong></>
+                ) : '아직 이 종목을 갖고 있지 않아요.'}
+              </p>
+              <div className="mt-4 flex gap-3">
+                <Button variant="buy" size="lg" className="flex-1" onClick={() => setOrder('buy')}>사기</Button>
+                <Button variant="sell" size="lg" className="flex-1" disabled={!held} onClick={() => setOrder('sell')}>팔기</Button>
+              </div>
+              <p className="mt-3 text-base text-slate-500">수수료는 없어요. 팔기는 가진 주식이 있을 때만 눌러져요.</p>
+            </Card>
+          </section>
+
+          {/* ④ 주문내역 */}
+          <section aria-labelledby="step-history" className="space-y-4">
+            <StepTitle id="step-history" n="4" title="주문내역" hint="가장 최근 5번이에요."
+              action={<Link to="/history" className="min-h-[44px] shrink-0 py-2 text-lg font-bold text-slate-700 underline underline-offset-4">전부 보기 →</Link>} />
+            {recent.length === 0 ? (
+              <Card padding="sm">
+                <p className="text-lg text-slate-600">🧾 아직 거래가 없어요. 위에서 종목을 고르고 <strong>사기</strong>를 눌러 보세요.</p>
+              </Card>
+            ) : (
+              <ul className="space-y-2">
+                {recent.map((trade) => <li key={trade.id}><TradeItem trade={trade} /></li>)}
+              </ul>
+            )}
+          </section>
+
+          <footer className="space-y-3 border-t border-slate-200 pt-6">
+            <p className="text-base text-slate-600">
+              ✅ 도쿄 증권거래소의 <strong>진짜 주식 가격</strong>이에요. 돈은 <strong>가짜 100만엔</strong>이고, 사고판 내용은 <strong>저장창고(Supabase)</strong>에 남아요.
+              {updatedAt && <span className="tnum"> 마지막으로 받은 시각 {updatedAt.toLocaleTimeString('ko-KR')} · 20초마다 자동으로 새로 받아요.</span>}
+            </p>
+            <Button variant="secondary" onClick={reload}>🔄 지금 새로 받기</Button>
+          </footer>
+
+          <OrderModal isOpen={order !== null} onClose={closeOrder} stock={stock} side={order || 'buy'} />
+        </div>
+      );
+    }
+
+    // 사고팔 때는 '몇 주'로 입력한다 (일본 주식은 실제로 100주 단위가 많지만, 연습이라 1주부터)
+    function OrderModal({ isOpen, onClose, stock, side }) {
+      const { wallet, actions } = useWallet();
+      const [qtyText, setQtyText] = useState('');
+      const [error, setError] = useState('');
+      const [sending, setSending] = useState(false);   // 서버에 보내는 중인가
+
+      const held = wallet.holdings[stock.code];
+      const isBuy = side === 'buy';
+      const maxQty = isBuy ? Math.floor(wallet.cash / stock.price) : (held ? held.qty : 0);
+
+      useEffect(() => {
+        if (isOpen) { setQtyText(''); setError(''); setSending(false); }
+      }, [isOpen, side]);
+
+      // 입력값 → 주문 수량·금액
+      const qty = Number(qtyText.replace(/[^0-9]/g, '')) || 0;
+      const orderAmount = qty * stock.price;
+      const cashAfter = isBuy ? wallet.cash - orderAmount : wallet.cash + orderAmount;
+
+      const setQty = (n) => { setQtyText(String(Math.max(0, Math.floor(n)))); setError(''); };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (sending) return;                      // 두 번 눌러도 한 번만 보낸다
+
+        // 먼저 화면에서 간단히 확인한다 (서버도 똑같이 다시 확인한다)
+        if (qty < 1) return setError('몇 주인지 적어 주세요.');
+        if (isBuy && orderAmount > wallet.cash + 1e-6) return setError(`돈이 모자라요. 쓸 수 있는 돈은 ${formatYen(wallet.cash)}이에요.`);
+        if (!isBuy && qty > maxQty) return setError(`가진 주식(${formatShares(maxQty)})보다 많이 팔 수 없어요.`);
+
+        setSending(true);
+        try {
+          // 체결 가격을 정하고 저장하는 일은 서버가 맡는다
+          if (isBuy) await actions.buy(stock, qty);
+          else await actions.sell(stock, qty);
+          onClose();
+        } catch (err) {
+          setError(err.message);                  // 서버가 알려 준 이유를 그대로 보여 준다
+        } finally {
+          setSending(false);
+        }
+      };
+
+      return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`${stock.name} ${isBuy ? '사기' : '팔기'}`}>
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <div className="flex items-center justify-between rounded-2xl bg-slate-100 px-4 py-3">
+              <span className="text-lg font-bold text-slate-600">1주 가격</span>
+              <PriceFlash value={stock.price} className="tnum text-xl font-extrabold">{formatYen(stock.price)}</PriceFlash>
+            </div>
+
+            <Input label={isBuy ? '몇 주 살까요?' : '몇 주 팔까요?'} inputMode="numeric" suffix="주" placeholder="0"
+              value={qty ? qty.toLocaleString('ko-KR') : ''}
+              onChange={(e) => { setQtyText(e.target.value); setError(''); }}
+              hint={isBuy ? `최대 ${formatShares(maxQty)}까지 살 수 있어요` : `가진 주식 ${formatShares(maxQty)}`} error={error} />
+
+            <div className="flex flex-wrap gap-2">
+              {isBuy ? (
+                <>
+                  {[1, 10, 100].map((n) => <Chip key={n} onClick={() => setQty(qty + n)}>+{n}주</Chip>)}
+                  <Chip onClick={() => setQty(maxQty)}>최대</Chip>
+                </>
+              ) : (
+                <>
+                  <Chip onClick={() => setQty(1)}>1주</Chip>
+                  <Chip onClick={() => setQty(maxQty / 2)}>절반</Chip>
+                  <Chip onClick={() => setQty(maxQty)}>전부</Chip>
+                </>
+              )}
+              <Chip onClick={() => setQty(0)}>지우기</Chip>
+            </div>
+
+            <dl className="space-y-2 rounded-2xl border border-slate-200 p-4 text-lg">
+              <div className="flex justify-between"><dt className="text-slate-600">{isBuy ? '내야 할 돈' : '받을 돈'}</dt><dd className="tnum text-xl font-extrabold">{formatYen(orderAmount)}</dd></div>
+              <div className="flex justify-between border-t border-slate-200 pt-2">
+                <dt className="text-slate-600">{isBuy ? '사고 나면 남는 돈' : '팔고 나면 내 돈'}</dt>
+                <dd className={cx('tnum font-bold', cashAfter < 0 && 'text-red-600')}>{formatYen(cashAfter)}</dd>
+              </div>
+            </dl>
+            <p className="text-base text-slate-500">수수료는 없어요 (요즘 일본 온라인 증권사는 무료예요).</p>
+
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={onClose} disabled={sending}>취소</Button>
+              <Button type="submit" variant={isBuy ? 'buy' : 'sell'} className="flex-1" disabled={sending}>
+                {sending ? '보내는 중…' : (isBuy ? '사기' : '팔기')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      );
+    }
+
+    function StockDetailPage() {
+      const { code } = useParams();
+      const { priceMap, market } = useMarkets();
+      const { wallet } = useWallet();
+      const { navigate } = useRouter();
+      const [order, setOrder] = useState(null); // 'buy' | 'sell' | null
+      const closeOrder = useCallback(() => setOrder(null), []);
+
+      const stock = priceMap[code];
+      if (!stock) {
+        return (
+          <EmptyState emoji="🤔" title="그런 종목이 없어요" description="주소를 다시 확인해 주세요."
+            action={<Button onClick={() => navigate('/')}>시세로 가기</Button>} />
+        );
+      }
+
+      const held = wallet.holdings[stock.code];
+      const profit = held ? held.qty * (stock.price - held.avgPrice) : 0;
+      const profitRate = held && held.avgPrice > 0 ? ((stock.price - held.avgPrice) / held.avgPrice) * 100 : 0;
+
+      return (
+        <div className="mx-auto max-w-3xl space-y-4">
+          <Button variant="ghost" onClick={() => navigate('/')}>← 시세로</Button>
+
+          <Card>
+            <div className="flex items-center gap-4">
+              <span aria-hidden="true" className="text-5xl">{stock.emoji}</span>
+              <div>
+                <h1 className="text-3xl font-extrabold">{stock.name}</h1>
+                <p className="text-lg text-slate-500">{stock.code} · {stock.sub} · 도쿄 증권거래소</p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <PriceFlash value={stock.price} className={cx('tnum text-4xl font-extrabold', toneOf(stock.changeRate))}>
+                {formatYen(stock.price)}
+              </PriceFlash>
+              <p className={cx('tnum mt-2 break-keep text-xl font-bold', toneOf(stock.changeRate))}>
+                {formatPercent(stock.changeRate)} ({signMark(stock.change)}{formatYen(Math.abs(stock.change))}) · 어제 마감가 대비
+              </p>
+              <p className="tnum mt-1 text-base text-slate-500">
+                {formatTokyo(stock.at)} 기준 (도쿄 시간){market.state === 'closed' && ' · 장이 닫혀서 마지막 가격이에요'}
+              </p>
+            </div>
+
+            <StockChart stock={stock} />
+
+            <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-200 pt-5 text-lg sm:grid-cols-4">
+              <div><dt className="text-slate-500">어제 마감가</dt><dd className="tnum font-bold">{formatYen(stock.prevClose)}</dd></div>
+              <div><dt className="text-slate-500">오늘 가장 높음</dt><dd className={cx('tnum font-bold', UP)}>{formatYen(stock.high)}</dd></div>
+              <div><dt className="text-slate-500">오늘 가장 낮음</dt><dd className={cx('tnum font-bold', DOWN)}>{formatYen(stock.low)}</dd></div>
+              <div><dt className="text-slate-500">오늘 거래된 양</dt><dd className="tnum font-bold">{formatVolume(stock.volume)}</dd></div>
+            </dl>
+          </Card>
+
+          {held && (
+            <Card>
+              <h2 className="text-xl font-extrabold">내가 가진 {stock.name}</h2>
+              <dl className="mt-4 grid grid-cols-2 gap-4 text-lg">
+                <div><dt className="text-slate-500">가진 주식</dt><dd className="tnum font-bold">{formatShares(held.qty)}</dd></div>
+                <div><dt className="text-slate-500">평균 산 가격</dt><dd className="tnum font-bold">{formatYen(held.avgPrice)}</dd></div>
+                <div><dt className="text-slate-500">지금 가치</dt><dd className="tnum font-bold">{formatYen(held.qty * stock.price)}</dd></div>
+                <div>
+                  <dt className="text-slate-500">벌거나 잃은 돈</dt>
+                  <dd className={cx('tnum font-bold', toneOf(profit))}>
+                    {formatSignedYen(profit)} ({formatPercent(profitRate)})
+                  </dd>
+                </div>
+              </dl>
+            </Card>
+          )}
+
+          <div className="sticky bottom-[84px] flex gap-3 md:bottom-6">
+            <Button variant="buy" size="lg" className="flex-1 shadow-lg" onClick={() => setOrder('buy')}>사기</Button>
+            <Button variant="sell" size="lg" className="flex-1 shadow-lg" disabled={!held} onClick={() => setOrder('sell')}>팔기</Button>
+          </div>
+
+          <OrderModal isOpen={order !== null} onClose={closeOrder} stock={stock} side={order || 'buy'} />
+        </div>
+      );
+    }
+
+    function WalletPage() {
+      const { actions, showToast } = useWallet();
+      const { navigate } = useRouter();
+      const { items } = usePortfolio();
+      const [confirmOpen, setConfirmOpen] = useState(false);
+      const closeConfirm = useCallback(() => setConfirmOpen(false), []);
+
+      return (
+        <div className="space-y-6">
+          <PageHeader title="내 지갑" description="시작한 돈 100만엔이 지금 얼마가 되었는지 보여줘요."
+            action={<Button variant="secondary" onClick={() => setConfirmOpen(true)}>🔄 처음부터 다시</Button>} />
+
+          <WalletCard />
+
+          <section className="space-y-3">
+            <h2 className="text-2xl font-extrabold">가진 주식</h2>
+            {items.length === 0 ? (
+              <EmptyState emoji="💰" title="아직 산 주식이 없어요" description="시세 화면에서 마음에 드는 종목을 사 보세요."
+                action={<Button onClick={() => navigate('/')}>🏠 처음 화면으로</Button>} />
+            ) : (
+              <ul className="space-y-2">
+                {items.map((item) => (
+                  <li key={item.code}>
+                    <Link to={`/stock/${item.code}`}
+                      className="flex items-center justify-between gap-3 rounded-2xl border-2 border-transparent bg-white px-4 py-3 shadow-sm transition hover:border-slate-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-300">
+                      <span className="flex items-center gap-3">
+                        <span aria-hidden="true" className="text-3xl">{item.stock?.emoji || '📄'}</span>
+                        <span>
+                          <span className="block text-xl font-bold leading-tight">{item.stock?.name || item.code}</span>
+                          <span className="tnum block text-base text-slate-500">
+                            {formatShares(item.qty)} · 평균 {formatYen(item.avgPrice)}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="text-right">
+                        <span className="tnum block text-xl font-extrabold">{formatYen(item.value)}</span>
+                        <span className={cx('tnum block text-base font-bold', toneOf(item.profit))}>
+                          {formatSignedYen(item.profit)} ({formatPercent(item.profitRate)})
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <Modal isOpen={confirmOpen} onClose={closeConfirm} title="처음부터 다시 할까요?" size="sm">
+            <p className="text-lg text-slate-700">가진 주식과 거래내역이 모두 지워지고, 돈이 100만엔으로 돌아가요.</p>
+            <div className="mt-6 flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={closeConfirm}>그만두기</Button>
+              <Button variant="sell" className="flex-1" onClick={() => { actions.reset().catch((err) => showToast(err.message)); closeConfirm(); }}>되돌리기</Button>
+            </div>
+          </Modal>
+        </div>
+      );
+    }
+
+    function HistoryPage() {
+      const { wallet } = useWallet();
+      const { navigate } = useRouter();
+      const realized = wallet.trades.reduce((sum, t) => sum + (t.profit || 0), 0);   // 팔아서 확정된 이익 합계
+
+      return (
+        <div className="space-y-6">
+          <PageHeader title="거래내역" description={`모두 ${wallet.trades.length}번 사고팔았어요.`} />
+
+          {wallet.trades.length === 0 ? (
+            <EmptyState emoji="🧾" title="아직 거래가 없어요" description="주식을 사고팔면 여기에 기록이 남아요."
+              action={<Button onClick={() => navigate('/')}>🏠 처음 화면으로</Button>} />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard label="거래 횟수" value={`${wallet.trades.length}번`} />
+                <StatCard label="팔아서 번(잃은) 돈 합계" value={formatSignedYen(realized)} />
+              </div>
+
+              <ul className="space-y-2">
+                {wallet.trades.map((trade) => (
+                  <li key={trade.id}><TradeItem trade={trade} /></li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    function NotFoundPage() {
+      const { navigate } = useRouter();
+      return (
+        <EmptyState emoji="🧭" title="없는 페이지예요" description="주소를 다시 확인해 주세요."
+          action={<Button onClick={() => navigate('/')}>처음으로</Button>} />
+      );
+    }
+
+    // 서버에서 시세와 지갑을 받아오기 전에는 기다리는 화면을 보여 준다
+    function LoadingGate({ children }) {
+      const { stocks, error: marketError, reload } = useMarkets();
+      const { wallet, actions } = useWallet();
+
+      // 한 번도 못 받아왔을 때만 '연결 실패'로 본다 (중간에 한 번 실패한 건 넘어간다)
+      const failed = (stocks.length === 0 && marketError) || (!wallet.ready && wallet.error);
+      if (failed) {
+        return (
+          <main className="mx-auto max-w-5xl px-4 py-16">
+            <EmptyState emoji="🔌" title="서버에 연결하지 못했어요" description={failed}
+              action={<Button onClick={() => { reload(); actions.reload(); }}>다시 해 보기</Button>} />
+          </main>
+        );
+      }
+
+      if (stocks.length === 0 || !wallet.ready) {
+        return (
+          <main className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+            <Spinner />
+            <p className="text-lg text-slate-600">시세와 지갑을 불러오는 중이에요…</p>
+          </main>
+        );
+      }
+
+      return children;
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    function App() {
+      return (
+        <MarketProvider>
+          <WalletProvider>
+            <LoadingGate>
+              <Router>
+                <Header />
+                <main className="mx-auto max-w-5xl px-4 pb-32 pt-6 md:pb-12 md:pt-8">
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/stock/:code" element={<StockDetailPage />} />
+                    <Route path="/wallet" element={<WalletPage />} />
+                    <Route path="/history" element={<HistoryPage />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+                </main>
+                <BottomNav />
+                <ToastHost />
+              </Router>
+            </LoadingGate>
+          </WalletProvider>
+        </MarketProvider>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

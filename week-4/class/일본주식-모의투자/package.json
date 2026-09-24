@@ -1,0 +1,14 @@
+{
+  "name": "jp-stock-mock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "진짜 일본주식 시세로 하는 모의투자 (가상 지갑 100만엔, PostgreSQL 저장)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
