@@ -17,10 +17,69 @@
     const { useState, useEffect, useRef } = React;
 
     // ========================================
+    // 🔑 로그인 (Supabase 이메일 로그인 — 서버가 대신 처리)
+    // ========================================
+
+    const SESSION_KEY = 'usinvest_session';
+    let session = null;
+    try { session = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch {}
+    let onForcedLogout = () => {};
+
+    function setSession(s) {
+      session = s;
+      try {
+        if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+        else localStorage.removeItem(SESSION_KEY);
+      } catch {}
+    }
+
+    // 로그인 시간이 지났을 때 새로 받는다 (동시에 여러 번 부르지 않게 하나로 합친다)
+    let refreshing = null;
+    function refreshSession() {
+      if (!refreshing) {
+        refreshing = fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: session.refresh_token })
+        })
+          .then((r) => r.json())
+          .then((j) => {
+            if (!j.success) return false;
+            setSession({ ...session, ...j.data });
+            return true;
+          })
+          .catch(() => false)
+          .finally(() => { refreshing = null; });
+      }
+      return refreshing;
+    }
+
+    // 로그인 표를 붙여서 서버를 부른다. 로그인이 풀렸으면 로그인 화면으로 돌아간다
+    async function api(path, options = {}) {
+      const call = () => fetch(path, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session ? { Authorization: `Bearer ${session.access_token}` } : {})
+        }
+      });
+      let res = await call();
+      if (res.status === 401) {
+        if (session?.refresh_token && await refreshSession()) {
+          res = await call();
+        } else {
+          setSession(null);
+          onForcedLogout();
+        }
+      }
+      return res.json();
+    }
+
+    // ========================================
     // 🎨 Design System
     // ========================================
 
-    function Button({ children, variant = 'primary', onClick, disabled = false, className = '' }) {
+    function Button({ children, variant = 'primary', type = 'button', onClick, disabled = false, className = '' }) {
       const variantClass = {
         primary: 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600',
         success: 'bg-green-600 hover:bg-green-700 disabled:bg-gray-600',
@@ -29,6 +88,7 @@
 
       return (
         <button
+          type={type}
           onClick={onClick}
           disabled={disabled}
           className={`px-4 py-2 rounded-lg font-semibold text-white transition-colors ${variantClass} ${className}`}
@@ -149,6 +209,144 @@
     }
 
     // ========================================
+    // 🔑 Login Screen
+    // ========================================
+
+    function LoginScreen({ onLoggedIn }) {
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [busy, setBusy] = useState(false);
+      const [message, setMessage] = useState('');
+
+      async function submit(kind) {
+        setBusy(true);
+        setMessage('');
+        try {
+          const res = await fetch(`/api/auth/${kind}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          const result = await res.json();
+          if (result.success) {
+            setSession(result.data);
+            onLoggedIn(result.data.email);
+            return;
+          }
+          setMessage(result.message);
+        } catch (err) {
+          setMessage('서버에 연결하지 못했어요. 잠시 후 다시 해 주세요.');
+        }
+        setBusy(false);
+      }
+
+      const inputClass = 'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white';
+      const empty = !email.trim() || !password;
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <Card className="w-full max-w-sm">
+            <h1 className="text-2xl font-bold mb-1">📊 미국주식 모의투자</h1>
+            <p className="text-sm text-gray-400 mb-4">이메일로 가입하면 나만의 지갑이 생겨요.</p>
+
+            <form onSubmit={(e) => { e.preventDefault(); submit('login'); }} className="space-y-3">
+              <div>
+                <label className="text-sm text-gray-400 block mb-1">이메일</label>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 block mb-1">비밀번호 (6자 이상)</label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
+              {message && <div className="p-3 bg-gray-700 rounded-lg text-sm">❌ {message}</div>}
+
+              <div className="flex gap-2">
+                <Button type="submit" disabled={busy || empty} className="flex-1">로그인</Button>
+                <Button variant="success" onClick={() => submit('signup')} disabled={busy || empty} className="flex-1">
+                  새로 가입
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🤖 Recommend Card
+    // ========================================
+
+    const ACTION_LABEL = {
+      buy: { text: '💚 사기', color: 'text-green-400' },
+      sell: { text: '❤️ 팔기', color: 'text-red-400' },
+      hold: { text: '⏳ 기다리기', color: 'text-gray-300' }
+    };
+
+    function RecommendCard() {
+      const [loading, setLoading] = useState(false);
+      const [result, setResult] = useState(null);
+      const [error, setError] = useState('');
+
+      async function ask() {
+        setLoading(true);
+        setError('');
+        try {
+          const r = await api('/api/recommend', { method: 'POST' });
+          if (r.success) setResult(r.data);
+          else setError(r.message);
+        } catch (err) {
+          setError('추천을 받지 못했어요. 잠시 후 다시 눌러 주세요.');
+        }
+        setLoading(false);
+      }
+
+      return (
+        <Card>
+          <h3 className="text-lg font-bold mb-2">🤖 다음 매매 추천</h3>
+          <p className="text-sm text-gray-400 mb-3">
+            내가 남긴 메모와 거래 내역을 AI 선생님이 읽고, 다음에 뭘 하면 좋을지 알려줘요.
+          </p>
+          <Button onClick={ask} disabled={loading} className="w-full">
+            {loading ? '선생님이 읽는 중… (몇 초 걸려요)' : '추천 받기'}
+          </Button>
+
+          {error && <div className="mt-3 p-3 bg-gray-700 rounded-lg text-sm">❌ {error}</div>}
+
+          {result && (
+            <div className="mt-3 space-y-2">
+              <div className="p-3 bg-gray-700 rounded-lg text-sm">{result.overview}</div>
+              {result.picks.map((p) => {
+                const label = ACTION_LABEL[p.action] || ACTION_LABEL.hold;
+                return (
+                  <div key={p.symbol} className="bg-gray-700 p-3 rounded-lg text-sm">
+                    <p className="font-semibold">
+                      {p.name} ({p.symbol}) <span className={label.color}>{label.text}</span>
+                    </p>
+                    <p className="text-xs text-gray-300 mt-1">{p.reason}</p>
+                  </div>
+                );
+              })}
+              <p className="text-xs text-gray-500">연습용 참고예요. 실제 투자 조언이 아니에요.</p>
+            </div>
+          )}
+        </Card>
+      );
+    }
+
+    // ========================================
     // 📄 Dashboard Tab
     // ========================================
 
@@ -156,6 +354,7 @@
       const [selectedSymbol, setSelectedSymbol] = useState('TSLA');
       const [timeframe, setTimeframe] = useState('1d');
       const [quantity, setQuantity] = useState('1');
+      const [memo, setMemo] = useState('');
       const [loading, setLoading] = useState(false);
       const [message, setMessage] = useState('');
 
@@ -168,21 +367,20 @@
         setMessage('');
 
         try {
-          const response = await fetch('/api/order', {
+          const result = await api('/api/order', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               symbol: selectedSymbol,
               type,
-              quantity: parseInt(quantity)
+              quantity: parseInt(quantity),
+              memo
             })
           });
-
-          const result = await response.json();
 
           if (result.success) {
             setMessage(`✅ ${type === 'buy' ? '매수' : '매도'} 완료!`);
             setQuantity('1');
+            setMemo('');
             onOrderPlaced();
           } else {
             setMessage(`❌ ${result.message}`);
@@ -288,6 +486,18 @@
                 />
               </div>
 
+              <div>
+                <label className="text-sm text-gray-400 block mb-1">메모 (왜 사고파나요? 안 적어도 돼요)</label>
+                <input
+                  type="text"
+                  value={memo}
+                  onChange={(e) => setMemo(e.target.value)}
+                  maxLength={200}
+                  placeholder="예) 신차 발표가 기대돼서 샀어요"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                />
+              </div>
+
               <div className="p-3 bg-gray-700 rounded-lg">
                 <p className="text-sm text-gray-400">거래 금액</p>
                 <p className="text-2xl font-bold text-green-400">${totalCost.toFixed(2)}</p>
@@ -339,6 +549,7 @@
                       <p className="text-xs text-gray-400">
                         {order.quantity}주 @ ${order.price.toFixed(2)}
                       </p>
+                      {order.memo && <p className="text-xs text-gray-300 mt-1">📝 {order.memo}</p>}
                     </div>
                     <div className="text-right">
                       <p className={order.type === 'buy' ? 'text-red-400' : 'text-green-400'}>
@@ -356,6 +567,8 @@
               )}
             </div>
           </Card>
+
+          <RecommendCard />
         </div>
       );
     }
@@ -365,17 +578,40 @@
     // ========================================
 
     function App() {
+      const [user, setUser] = useState(session?.email || null);
       const [wallet, setWallet] = useState(null);
       const [prices, setPrices] = useState({});
       const [orders, setOrders] = useState([]);
       const [loading, setLoading] = useState(true);
+      const [loadError, setLoadError] = useState('');
+
+      function clearData() {
+        setUser(null);
+        setWallet(null);
+        setOrders([]);
+        setLoadError('');
+      }
+
+      useEffect(() => {
+        onForcedLogout = clearData;
+      }, []);
+
+      function logout() {
+        setSession(null);
+        clearData();
+      }
 
       async function loadData() {
         try {
           // 지갑 로드
-          const walletRes = await fetch('/api/wallet');
-          const walletData = await walletRes.json();
-          if (walletData.success) setWallet(walletData.data);
+          const walletData = await api('/api/wallet');
+          if (walletData.needLogin) return;
+          if (walletData.success) {
+            setWallet(walletData.data);
+            setLoadError('');
+          } else {
+            setLoadError(walletData.message || '');
+          }
 
           // 가격 로드
           const priceData = {};
@@ -387,8 +623,7 @@
           setPrices(priceData);
 
           // 주문 로드
-          const ordersRes = await fetch('/api/orders');
-          const ordersData = await ordersRes.json();
+          const ordersData = await api('/api/orders');
           if (ordersData.success) setOrders(ordersData.data);
 
           setLoading(false);
@@ -399,10 +634,15 @@
       }
 
       useEffect(() => {
+        if (!user) return;
         loadData();
         const interval = setInterval(loadData, 3000);
         return () => clearInterval(interval);
-      }, []);
+      }, [user]);
+
+      if (!user) {
+        return <LoginScreen onLoggedIn={(email) => { setLoading(true); setUser(email); }} />;
+      }
 
       if (loading) {
         return (
@@ -418,11 +658,29 @@
       return (
         <div className="min-h-screen bg-gray-900">
           <header className="bg-gradient-to-r from-blue-900 to-blue-800 p-6 shadow-lg">
-            <h1 className="text-3xl font-bold">📊 미국주식 모의투자</h1>
-            <p className="text-blue-200 mt-1">Alpaca 실시간 가격 + 가상 지갑</p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold">📊 미국주식 모의투자</h1>
+                <p className="text-blue-200 mt-1">Alpaca 실시간 가격 + 가상 지갑</p>
+              </div>
+              <div className="text-right text-sm">
+                <p className="text-blue-200 break-all">{user}</p>
+                <button
+                  onClick={logout}
+                  className="mt-1 px-3 py-1 rounded-lg bg-blue-700 hover:bg-blue-600 text-white"
+                >
+                  로그아웃
+                </button>
+              </div>
+            </div>
           </header>
 
           <main className="max-w-6xl mx-auto p-4">
+            {loadError && (
+              <div className="mb-4 p-3 bg-red-900 bg-opacity-50 border border-red-700 rounded-lg text-sm">
+                ❌ {loadError}
+              </div>
+            )}
             <DashboardTab
               wallet={wallet}
               prices={prices}
