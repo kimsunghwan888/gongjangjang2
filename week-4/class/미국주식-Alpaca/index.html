@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>미국주식 모의투자 (Alpaca)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ========================================
+    // 🎨 Design System
+    // ========================================
+
+    function Button({ children, variant = 'primary', onClick, disabled = false, className = '' }) {
+      const variantClass = {
+        primary: 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600',
+        success: 'bg-green-600 hover:bg-green-700 disabled:bg-gray-600',
+        danger: 'bg-red-600 hover:bg-red-700 disabled:bg-gray-600',
+      }[variant];
+
+      return (
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className={`px-4 py-2 rounded-lg font-semibold text-white transition-colors ${variantClass} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return (
+        <div className={`bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function StatBox({ label, value, color = 'blue' }) {
+      const colorClass = {
+        blue: 'text-blue-400',
+        green: 'text-green-400',
+        red: 'text-red-400',
+        gray: 'text-gray-400'
+      }[color];
+
+      return (
+        <div className="text-center">
+          <p className="text-sm text-gray-400 mb-1">{label}</p>
+          <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📊 Chart Component
+    // ========================================
+
+    function StockChart({ symbol, timeframe }) {
+      const canvasRef = useRef(null);
+      const chartRef = useRef(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        async function loadChart() {
+          try {
+            const response = await fetch(`/api/chart?symbol=${symbol}&timeframe=${timeframe}`);
+            const result = await response.json();
+
+            if (!result.success) return;
+
+            const { labels, values } = result.data;
+
+            // 이전 차트 제거
+            if (chartRef.current) chartRef.current.destroy();
+
+            // 새 차트 생성
+            const ctx = canvasRef.current.getContext('2d');
+            chartRef.current = new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels,
+                datasets: [
+                  {
+                    label: `${symbol} ${timeframe}`,
+                    data: values,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#3b82f6',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                  }
+                ]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                  legend: {
+                    labels: { color: '#9ca3af' }
+                  }
+                },
+                scales: {
+                  y: {
+                    ticks: { color: '#9ca3af' },
+                    grid: { color: '#374151' }
+                  },
+                  x: {
+                    ticks: { color: '#9ca3af' },
+                    grid: { color: '#374151' }
+                  }
+                }
+              }
+            });
+
+            setLoading(false);
+          } catch (err) {
+            console.error('Chart load error:', err);
+            setLoading(false);
+          }
+        }
+
+        loadChart();
+
+        return () => {
+          if (chartRef.current) chartRef.current.destroy();
+        };
+      }, [symbol, timeframe]);
+
+      return (
+        <div className="relative">
+          {loading && <div className="text-center py-4 text-gray-400">차트 로딩 중...</div>}
+          <canvas ref={canvasRef}></canvas>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📄 Dashboard Tab
+    // ========================================
+
+    function DashboardTab({ wallet, prices, orders, onOrderPlaced }) {
+      const [selectedSymbol, setSelectedSymbol] = useState('TSLA');
+      const [timeframe, setTimeframe] = useState('1d');
+      const [quantity, setQuantity] = useState('1');
+      const [loading, setLoading] = useState(false);
+      const [message, setMessage] = useState('');
+
+      const currentPrice = prices[selectedSymbol] || 0;
+      const held = wallet?.holdings[selectedSymbol] || 0;
+      const totalCost = currentPrice * (parseInt(quantity) || 0);
+
+      async function handleOrder(type) {
+        setLoading(true);
+        setMessage('');
+
+        try {
+          const response = await fetch('/api/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              symbol: selectedSymbol,
+              type,
+              quantity: parseInt(quantity)
+            })
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            setMessage(`✅ ${type === 'buy' ? '매수' : '매도'} 완료!`);
+            setQuantity('1');
+            onOrderPlaced();
+          } else {
+            setMessage(`❌ ${result.message}`);
+          }
+        } catch (err) {
+          setMessage(`❌ 오류: ${err.message}`);
+        }
+
+        setLoading(false);
+      }
+
+      return (
+        <div className="space-y-4">
+          {/* 자산 요약 */}
+          {wallet && (
+            <Card className="bg-gradient-to-r from-gray-700 to-gray-800">
+              <div className="grid grid-cols-4 gap-4">
+                <StatBox
+                  label="현금"
+                  value={`$${wallet.cash.toFixed(0)}`}
+                  color="blue"
+                />
+                <StatBox
+                  label="주식평가"
+                  value={`$${wallet.totalValue.toFixed(0)}`}
+                  color="green"
+                />
+                <StatBox
+                  label="총 자산"
+                  value={`$${wallet.totalAsset.toFixed(0)}`}
+                  color={wallet.profitRate >= 0 ? 'green' : 'red'}
+                />
+                <StatBox
+                  label="수익률"
+                  value={`${wallet.profitRate > 0 ? '+' : ''}${wallet.profitRate.toFixed(2)}%`}
+                  color={wallet.profitRate >= 0 ? 'green' : 'red'}
+                />
+              </div>
+            </Card>
+          )}
+
+          {/* 종목 선택 & 차트 */}
+          <Card>
+            <div className="mb-4 flex gap-2 flex-wrap">
+              {['TSLA', 'GOOGL', 'AAPL', 'AMZN'].map(sym => (
+                <button
+                  key={sym}
+                  onClick={() => setSelectedSymbol(sym)}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                    selectedSymbol === sym
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {sym}
+                </button>
+              ))}
+            </div>
+
+            {prices[selectedSymbol] && (
+              <div className="mb-4 p-3 bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-400">현재 주가</p>
+                <p className="text-3xl font-bold text-blue-400">${prices[selectedSymbol].toFixed(2)}</p>
+              </div>
+            )}
+
+            {/* 차트 타임프레임 */}
+            <div className="mb-4 flex gap-2">
+              {['1m', '1d', '1w', '1mo'].map(tf => (
+                <button
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                    timeframe === tf
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  {tf === '1m' ? '분' : tf === '1d' ? '일' : tf === '1w' ? '주' : '월'}
+                </button>
+              ))}
+            </div>
+
+            {/* 차트 */}
+            <div className="bg-gray-900 p-4 rounded-lg mb-4" style={{ height: '300px' }}>
+              <StockChart symbol={selectedSymbol} timeframe={timeframe} />
+            </div>
+          </Card>
+
+          {/* 매매 */}
+          <Card>
+            <h3 className="text-lg font-bold mb-4">🔄 매매</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm text-gray-400 block mb-1">수량</label>
+                <input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                  min="1"
+                />
+              </div>
+
+              <div className="p-3 bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-400">거래 금액</p>
+                <p className="text-2xl font-bold text-green-400">${totalCost.toFixed(2)}</p>
+              </div>
+
+              <div className="p-3 bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-400">보유 주식</p>
+                <p className="text-xl font-bold text-blue-400">{held}주</p>
+              </div>
+
+              {message && (
+                <div className="p-3 bg-gray-700 rounded-lg text-sm">
+                  {message}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="success"
+                  onClick={() => handleOrder('buy')}
+                  disabled={loading || !wallet || wallet.cash < totalCost}
+                  className="flex-1"
+                >
+                  💚 매수
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => handleOrder('sell')}
+                  disabled={loading || held === 0}
+                  className="flex-1"
+                >
+                  ❤️ 매도
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* 최근 주문 */}
+          <Card>
+            <h3 className="text-lg font-bold mb-4">📋 최근 주문 (5개)</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {orders.slice(-5).reverse().map((order, idx) => (
+                <div key={idx} className="bg-gray-700 p-3 rounded-lg text-sm">
+                  <div className="flex justify-between">
+                    <div>
+                      <p className="font-semibold">
+                        {order.type === 'buy' ? '💚 매수' : '❤️ 매도'} {order.symbol}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {order.quantity}주 @ ${order.price.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className={order.type === 'buy' ? 'text-red-400' : 'text-green-400'}>
+                        ${order.totalCost.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(order.timestamp).toLocaleTimeString('ko-KR')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {orders.length === 0 && (
+                <p className="text-center text-gray-500 py-4">주문 내역이 없습니다</p>
+              )}
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🚀 App
+    // ========================================
+
+    function App() {
+      const [wallet, setWallet] = useState(null);
+      const [prices, setPrices] = useState({});
+      const [orders, setOrders] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      async function loadData() {
+        try {
+          // 지갑 로드
+          const walletRes = await fetch('/api/wallet');
+          const walletData = await walletRes.json();
+          if (walletData.success) setWallet(walletData.data);
+
+          // 가격 로드
+          const priceData = {};
+          for (const symbol of ['TSLA', 'GOOGL', 'AAPL', 'AMZN']) {
+            const priceRes = await fetch(`/api/price?symbol=${symbol}`);
+            const priceJson = await priceRes.json();
+            if (priceJson.success) priceData[symbol] = priceJson.data.price;
+          }
+          setPrices(priceData);
+
+          // 주문 로드
+          const ordersRes = await fetch('/api/orders');
+          const ordersData = await ordersRes.json();
+          if (ordersData.success) setOrders(ordersData.data);
+
+          setLoading(false);
+        } catch (err) {
+          console.error('Load error:', err);
+          setLoading(false);
+        }
+      }
+
+      useEffect(() => {
+        loadData();
+        const interval = setInterval(loadData, 3000);
+        return () => clearInterval(interval);
+      }, []);
+
+      if (loading) {
+        return (
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-xl mb-4">📊 모의투자 앱 로딩 중...</p>
+              <div className="animate-spin text-blue-400">⌛</div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gray-900">
+          <header className="bg-gradient-to-r from-blue-900 to-blue-800 p-6 shadow-lg">
+            <h1 className="text-3xl font-bold">📊 미국주식 모의투자</h1>
+            <p className="text-blue-200 mt-1">Alpaca 실시간 가격 + 가상 지갑</p>
+          </header>
+
+          <main className="max-w-6xl mx-auto p-4">
+            <DashboardTab
+              wallet={wallet}
+              prices={prices}
+              orders={orders}
+              onOrderPlaced={loadData}
+            />
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

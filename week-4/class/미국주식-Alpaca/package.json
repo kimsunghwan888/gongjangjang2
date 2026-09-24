@@ -1,0 +1,17 @@
+{
+  "name": "us-stocks-mock-trading",
+  "version": "1.0.0",
+  "description": "미국주식 모의투자 앱 (Alpaca API + 가상 지갑)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  }
+}
