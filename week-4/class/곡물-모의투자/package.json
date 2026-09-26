@@ -1,0 +1,17 @@
+{
+  "name": "grain-mock-trading",
+  "version": "1.0.0",
+  "description": "곡물 모의투자 앱 (야후 곡물 선물 시세 + 가상 지갑)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  }
+}

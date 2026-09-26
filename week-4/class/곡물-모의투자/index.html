@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>곡물 모의투자</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <!-- ⚠️ 모든 CDN은 버전을 고정한다. Babel은 반드시 7.x (8.x는 인라인 text/babel이 깨진다) -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <style>
+    @keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .animate-fade-up { animation: fade-up .3s ease-out both; }
+    /* 숫자가 바뀔 때 자리가 흔들리지 않게 */
+    .tnum { font-variant-numeric: tabular-nums; }
+    /* 푸른 바탕에 은은한 빛무리 */
+    .sea {
+      background:
+        radial-gradient(60rem 30rem at 15% -10%, rgba(125, 211, 252, .35), transparent 60%),
+        radial-gradient(50rem 30rem at 100% 10%, rgba(59, 130, 246, .45), transparent 60%),
+        linear-gradient(180deg, #0b3d91 0%, #1554c0 45%, #1d78d8 100%);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .animate-fade-up, .animate-spin { animation: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-blue-800 text-white font-sans antialiased">
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useEffect, useMemo, useCallback, useRef, useId } = React;
+
+    const cx = (...classes) => classes.filter(Boolean).join(' ');
+
+    // ========================================
+    // 📡 서버와 대화하기
+    // ========================================
+    const API_BASE_URL = '/api';
+
+    // 서버는 언제나 { success, data, message } 모양으로 답한다. 실패하면 사람이 읽을 수 있는 문장으로 던진다
+    async function api(endpoint, { method = 'GET', body } = {}) {
+      let res;
+      try {
+        res = await fetch(`${API_BASE_URL}${endpoint}`, {
+          method,
+          headers: body ? { 'content-type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      } catch {
+        throw new Error('서버에 연결하지 못했어요. 서버가 켜져 있는지 확인해 주세요. (node server.js)');
+      }
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.message || `문제가 생겼어요. (${res.status})`);
+      return json.data;
+    }
+
+    // ========================================
+    // 🔢 숫자 · 날짜 표시 도우미
+    // ========================================
+    // 한국 관례: 오르면 빨강, 내리면 파랑
+    const tidy = (n) => (Math.abs(n) < 0.005 ? 0 : n);   // 0.0000001 같은 찌꺼기는 0으로 본다
+    const formatPrice = (v) => `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+    const formatUsd = (v) => tidy(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    const formatSignedUsd = (v) => `${tidy(v) > 0 ? '+' : tidy(v) < 0 ? '-' : ''}${formatUsd(Math.abs(v))}`;
+    const formatPercent = (v) => `${tidy(v) > 0 ? '+' : ''}${tidy(v).toFixed(2)}%`;
+    const formatTime = (iso) =>
+      new Date(iso).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    const TREND = {
+      up:   { arrow: '▲', text: 'text-red-600',   line: '#dc2626', fill: 'rgba(220, 38, 38, 0.12)' },
+      down: { arrow: '▼', text: 'text-blue-600',  line: '#2563eb', fill: 'rgba(37, 99, 235, 0.12)' },
+      flat: { arrow: '–', text: 'text-slate-500', line: '#64748b', fill: 'rgba(100, 116, 139, 0.12)' },
+    };
+    const trendOf = (change) => (tidy(change) > 0 ? TREND.up : tidy(change) < 0 ? TREND.down : TREND.flat);
+
+    // ========================================
+    // 📦 고정 자료
+    // ========================================
+    // 가격·단위는 서버가 주고, 화면은 이름과 그림만 미리 안다 (가격이 오기 전에도 버튼을 보여주려고)
+    const GRAIN_BASE = [
+      { id: 'rice',  name: '쌀',     emoji: '🍚' },
+      { id: 'wheat', name: '밀',     emoji: '🍞' },
+      { id: 'corn',  name: '옥수수', emoji: '🌽' },
+      { id: 'oats',  name: '귀리',   emoji: '🌾' },
+      { id: 'soy',   name: '콩',     emoji: '🌱' },
+    ];
+    const EMOJI_OF = Object.fromEntries(GRAIN_BASE.map((g) => [g.id, g.emoji]));
+
+    const TIMEFRAMES = [
+      { id: 'day',   label: '일봉', hint: '하루에 한 점씩 · 최근 6개월' },
+      { id: 'week',  label: '주봉', hint: '한 주에 한 점씩 · 최근 2년' },
+      { id: 'month', label: '월봉', hint: '한 달에 한 점씩 · 최근 10년' },
+    ];
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    const BUTTON_VARIANTS = {
+      primary: 'bg-blue-700 text-white hover:bg-blue-800 focus-visible:ring-blue-300',
+      buy: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-300',
+      sell: 'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-300',
+      light: 'bg-slate-100 text-slate-800 hover:bg-slate-200 focus-visible:ring-slate-300',
+      outline: 'border-2 border-white/60 bg-transparent text-white hover:bg-white/15 focus-visible:ring-white/60',
+    };
+
+    const BUTTON_SIZES = {
+      sm: 'min-h-[48px] px-4 text-lg',
+      md: 'min-h-[56px] px-5 text-xl',
+      lg: 'min-h-[64px] px-7 text-2xl',
+    };
+
+    function Button({ variant = 'primary', size = 'md', type = 'button', disabled = false, className = '', children, ...rest }) {
+      return (
+        <button
+          type={type}
+          disabled={disabled}
+          className={cx(
+            'inline-flex items-center justify-center gap-2 rounded-2xl font-black transition',
+            'focus:outline-none focus-visible:ring-4 disabled:cursor-not-allowed disabled:opacity-40',
+            BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className
+          )}
+          {...rest}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    // 색·여백은 className 대신 tone 으로 고른다 (같은 종류 클래스가 겹치면 어느 쪽이 이길지 모름)
+    const CARD_TONES = {
+      white: 'border-white bg-white text-slate-900 shadow-xl shadow-blue-950/25',
+      glass: 'border-white/25 bg-white/10 text-white backdrop-blur',
+    };
+
+    function Card({ tone = 'white', className = '', children, ...rest }) {
+      return (
+        <div className={cx('min-w-0 rounded-3xl border-2 p-5 sm:p-6', CARD_TONES[tone], className)} {...rest}>
+          {children}
+        </div>
+      );
+    }
+
+    const BADGE_TONES = {
+      onBlue: 'bg-white text-blue-800',
+      onWhite: 'bg-blue-700 text-white',
+    };
+
+    function SectionTitle({ step, badgeTone = 'onBlue', children, className = '' }) {
+      return (
+        <h2 className={cx('flex items-center gap-3 text-2xl font-black', className)}>
+          {step && (
+            <span aria-hidden="true" className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg font-black', BADGE_TONES[badgeTone])}>
+              {step}
+            </span>
+          )}
+          {children}
+        </h2>
+      );
+    }
+
+    function EmptyState({ icon, title, hint }) {
+      return (
+        <div className="flex flex-col items-center gap-1 rounded-2xl border-2 border-dashed border-slate-300 px-4 py-8 text-center">
+          <span aria-hidden="true" className="text-4xl">{icon}</span>
+          <p className="mt-1 text-xl font-bold text-slate-700">{title}</p>
+          <p className="text-lg text-slate-500">{hint}</p>
+        </div>
+      );
+    }
+
+    // 수량 고르기: 빼기 · 숫자 칸 · 더하기
+    function Stepper({ label, value, onChange, min = 0, max = 9999 }) {
+      const id = useId();
+      const clamp = (n) => Math.min(Math.max(n, min), max);
+      return (
+        <div>
+          <label htmlFor={id} className="mb-2 block text-xl font-bold text-slate-800">{label}</label>
+          <div className="flex items-stretch gap-2">
+            <button
+              type="button"
+              aria-label="하나 줄이기"
+              onClick={() => onChange(clamp(value - 1))}
+              disabled={value <= min}
+              className="min-h-[60px] w-16 rounded-2xl bg-slate-100 text-3xl font-black text-slate-700 transition hover:bg-slate-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-300 disabled:opacity-40"
+            >
+              −
+            </button>
+            <input
+              id={id}
+              type="number"
+              inputMode="numeric"
+              min={min}
+              max={max}
+              value={value}
+              onChange={(e) => onChange(clamp(parseInt(e.target.value, 10) || 0))}
+              className="tnum min-h-[60px] w-full min-w-0 rounded-2xl border-2 border-slate-300 bg-white px-3 text-center text-3xl font-black text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-200"
+            />
+            <button
+              type="button"
+              aria-label="하나 늘리기"
+              onClick={() => onChange(clamp(value + 1))}
+              disabled={value >= max}
+              className="min-h-[60px] w-16 rounded-2xl bg-slate-100 text-3xl font-black text-slate-700 transition hover:bg-slate-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-slate-300 disabled:opacity-40"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 글자 입력 칸 (메모용)
+    function TextField({ label, hint, value, onChange, placeholder, maxLength }) {
+      const id = useId();
+      return (
+        <div>
+          <label htmlFor={id} className="mb-1 block text-xl font-bold text-slate-800">{label}</label>
+          {hint && <p className="mb-2 text-lg text-slate-500">{hint}</p>}
+          <input
+            id={id}
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            maxLength={maxLength}
+            className="min-h-[56px] w-full rounded-2xl border-2 border-slate-300 bg-white px-4 text-xl text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-200"
+          />
+        </div>
+      );
+    }
+
+    // 선 그래프 (Chart.js). 곡물·기간이 바뀌면 새로 그린다
+    function LineChart({ points, tf, color, fill, label }) {
+      const canvasRef = useRef(null);
+      useEffect(() => {
+        if (typeof Chart === 'undefined' || !canvasRef.current) return undefined;
+        const [y, m] = [(d) => d.slice(0, 4), (d) => Number(d.slice(5, 7))];
+        const day = (d) => Number(d.slice(8, 10));
+        const tickText = (d) => (tf === 'day' ? `${m(d)}/${day(d)}` : `${y(d)}.${m(d)}`);
+        const titleText = (d) => (tf === 'month' ? `${y(d)}년 ${m(d)}월` : `${y(d)}년 ${m(d)}월 ${day(d)}일${tf === 'week' ? ' 주' : ''}`);
+        // 거래가 없던 날은 자료가 빠져 있으니, 점 번호가 아니라 날짜 위치에 맞춰 그린다
+        const data = points.map((p) => ({ x: Date.parse(`${p.date}T00:00:00Z`), y: p.close, date: p.date }));
+        const [first, last] = [data[0].x, data[data.length - 1].x];
+        const tickCount = window.innerWidth < 640 ? 3 : 5;
+        const chart = new Chart(canvasRef.current, {
+          type: 'line',
+          data: {
+            datasets: [{
+              data,
+              borderColor: color,
+              backgroundColor: fill,
+              borderWidth: 3,
+              fill: true,
+              tension: 0.15,
+              pointRadius: 0,
+              pointHoverRadius: 6,
+              pointHoverBackgroundColor: color,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            parsing: false,
+            animation: { duration: 250 },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                titleFont: { size: 15 },
+                bodyFont: { size: 18, weight: 'bold' },
+                padding: 12,
+                displayColors: false,
+                callbacks: {
+                  title: (items) => titleText(items[0].raw.date),
+                  label: (item) => formatPrice(item.raw.y),
+                },
+              },
+            },
+            scales: {
+              x: {
+                type: 'linear',
+                min: first,
+                max: last,
+                grid: { display: false },
+                // 눈금은 처음~끝을 똑같이 나눠서 날짜로 적는다
+                afterBuildTicks(axis) {
+                  axis.ticks = Array.from({ length: tickCount + 1 }, (_, i) => ({ value: first + ((last - first) * i) / tickCount }));
+                },
+                ticks: { maxRotation: 0, font: { size: 14 }, callback: (v) => tickText(new Date(v).toISOString().slice(0, 10)) },
+              },
+              y: {
+                grid: { color: 'rgba(100, 116, 139, 0.15)' },
+                ticks: { maxTicksLimit: 5, font: { size: 14 }, callback: (v) => `$${Number(v).toFixed(2)}` },
+              },
+            },
+          },
+        });
+        return () => chart.destroy();
+      }, [points, tf, color, fill]);
+      return <canvas ref={canvasRef} role="img" aria-label={label} />;
+    }
+
+    // 잠깐 떴다 사라지는 안내 문구
+    function Toast({ notice, onClose }) {
+      useEffect(() => {
+        if (!notice) return undefined;
+        const timer = setTimeout(onClose, 5000);
+        return () => clearTimeout(timer);
+      }, [notice]);
+      if (!notice) return null;
+      return (
+        <div
+          role="status"
+          className={cx(
+            'fixed inset-x-4 bottom-6 z-50 mx-auto max-w-md animate-fade-up rounded-2xl px-5 py-4 text-center text-lg font-bold text-white shadow-2xl',
+            notice.tone === 'error' ? 'bg-red-700' : 'bg-slate-900'
+          )}
+        >
+          {notice.text}
+        </div>
+      );
+    }
+
+    // 문제가 생겼을 때 이유와 "다시 해보기" 버튼
+    function ErrorBanner({ message, onRetry }) {
+      return (
+        <div role="alert" className="flex flex-col items-center gap-3 rounded-2xl border-2 border-amber-300 bg-amber-100 px-4 py-4 text-center text-lg font-bold text-amber-900 sm:flex-row sm:justify-between sm:text-left">
+          <span>⚠️ {message}</span>
+          <Button variant="light" size="sm" onClick={onRetry} className="shrink-0">다시 해보기</Button>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🧩 Common/Layout Components
+    // ========================================
+    function Header() {
+      return (
+        <header className="text-center">
+          <p className="text-lg font-bold tracking-wide text-sky-200">진짜 곡물 가격 · 가짜 돈 연습</p>
+          <h1 className="mt-1 text-4xl font-black sm:text-5xl">곡물 모의투자</h1>
+          <p className="mt-2 text-xl text-blue-100">돈 잃을 걱정 없이, 사고파는 연습을 해보세요.</p>
+        </header>
+      );
+    }
+
+    // 내 지갑: 현금 + 곡물 평가액 + 수익률
+    function WalletBar({ wallet }) {
+      const rate = wallet ? wallet.profitRate * 100 : 0;
+      const trend = trendOf(rate);
+      const show = (fn, v) => (wallet ? fn(v) : '—');
+      return (
+        <Card tone="glass" aria-label="내 지갑">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <p className="text-lg font-bold text-sky-200">내 현금 (가짜 돈)</p>
+              <p className="tnum text-2xl font-black sm:text-3xl">{show(formatUsd, wallet?.cash)}</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-sky-200">가진 곡물 값어치</p>
+              <p className="tnum text-2xl font-black sm:text-3xl">{show(formatUsd, wallet?.holdingsValue)}</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-sky-200">내 전체 재산</p>
+              <p className="tnum text-2xl font-black sm:text-3xl">{show(formatUsd, wallet?.totalAsset)}</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-sky-200">수익률</p>
+              <p className="tnum text-2xl font-black sm:text-3xl">{show(formatPercent, rate)}</p>
+              <p className="tnum text-lg font-bold text-blue-100">
+                {wallet && <span aria-hidden="true">{trend.arrow} </span>}{wallet ? `${formatSignedUsd(wallet.profit)} (처음 $1,000 기준)` : ''}
+              </p>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // 곡물 이름이 곧 버튼
+    function GrainButton({ grain, selected, onSelect, className = '' }) {
+      const trend = trendOf(grain.changePct ?? 0);
+      return (
+        <button
+          type="button"
+          aria-pressed={selected}
+          onClick={() => onSelect(grain.id)}
+          className={cx(
+            'flex min-h-[132px] flex-col items-center justify-center gap-1 rounded-3xl border-2 px-3 py-4 transition',
+            'focus:outline-none focus-visible:ring-4 focus-visible:ring-white/70',
+            selected
+              ? 'scale-[1.03] border-white bg-white text-blue-900 shadow-xl shadow-blue-950/30'
+              : 'border-white/35 bg-white/10 text-white hover:bg-white/20',
+            className
+          )}
+        >
+          <span aria-hidden="true" className="text-5xl leading-none">{grain.emoji}</span>
+          <span className="text-3xl font-black">{grain.name}</span>
+          <span className={cx('tnum text-lg font-bold', selected ? trend.text : 'text-blue-100')}>
+            {grain.price == null ? '—' : formatPrice(grain.price)}
+          </span>
+        </button>
+      );
+    }
+
+    function GrainPicker({ grains, selectedId, onSelect }) {
+      return (
+        <section aria-labelledby="pick-title">
+          <SectionTitle step="1" className="mb-4"><span id="pick-title">곡물을 고르세요</span></SectionTitle>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 sm:gap-4">
+            {grains.map((grain, index) => (
+              <GrainButton
+                key={grain.id}
+                grain={grain}
+                selected={grain.id === selectedId}
+                onSelect={onSelect}
+                className={index === grains.length - 1 ? 'col-span-2 sm:col-span-1' : ''}
+              />
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    function Footer({ onReset, busy }) {
+      return (
+        <footer className="flex flex-col items-center gap-4 pb-8 text-center text-lg text-blue-100">
+          <p>
+            연습용 앱이에요. 진짜 돈은 오가지 않습니다.<br />
+            시세는 미국 곡물 선물 가격(야후 파이낸스)이고, 약 10~15분 늦게 반영돼요.
+          </p>
+          <Button variant="outline" size="sm" onClick={onReset} disabled={busy}>처음부터 다시 (현금 $1,000)</Button>
+        </footer>
+      );
+    }
+
+    // ========================================
+    // 📄 Page Components
+    // ========================================
+    // 고른 곡물의 현재가 + 일봉·주봉·월봉 선 그래프
+    function PriceCard({ grain }) {
+      const [tf, setTf] = useState('day');
+      const [tries, setTries] = useState(0);
+      const [chart, setChart] = useState({ status: 'loading', points: [], error: '' });
+
+      useEffect(() => {
+        let ignore = false;
+        setChart((c) => ({ ...c, status: 'loading' }));
+        api(`/chart?grain=${grain.id}&tf=${tf}`)
+          .then((d) => { if (!ignore) setChart({ status: 'ok', points: d.points, error: '' }); })
+          .catch((e) => { if (!ignore) setChart({ status: 'error', points: [], error: e.message }); });
+        return () => { ignore = true; };
+      }, [grain.id, tf, tries]);
+
+      const stats = useMemo(() => {
+        const closes = chart.points.map((p) => p.close);
+        if (!closes.length) return null;
+        const first = closes[0];
+        const last = closes[closes.length - 1];
+        return { high: Math.max(...closes), low: Math.min(...closes), pct: ((last - first) / first) * 100 };
+      }, [chart.points]);
+
+      const dayTrend = trendOf(grain.changePct ?? 0);
+      const periodTrend = trendOf(stats ? stats.pct : 0);
+      const tfInfo = TIMEFRAMES.find((t) => t.id === tf);
+
+      return (
+        <Card className="lg:col-span-3">
+          <div className="flex items-center gap-3">
+            <span aria-hidden="true" className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-4xl">{grain.emoji}</span>
+            <div>
+              <h3 className="text-3xl font-black">{grain.name}</h3>
+              <p className="text-lg text-slate-500">{grain.unit ? `가격 기준: ${grain.unit}` : ' '}</p>
+            </div>
+          </div>
+
+          {grain.price == null ? (
+            <p className="mt-5 text-2xl font-black text-slate-500">지금은 시세를 가져오지 못했어요.</p>
+          ) : (
+            <>
+              <p className="tnum mt-5 text-6xl font-black">{formatPrice(grain.price)}</p>
+              <p className={cx('tnum mt-1 text-2xl font-black', dayTrend.text)}>
+                <span aria-hidden="true">{dayTrend.arrow} </span>직전 마감보다 {formatPercent(grain.changePct ?? 0)}
+              </p>
+              <p className="mt-1 text-lg text-slate-500">시세 기준: {formatTime(grain.asOf)}</p>
+            </>
+          )}
+
+          <div className="mt-6 flex gap-2" role="group" aria-label="그래프 기간">
+            {TIMEFRAMES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={t.id === tf}
+                onClick={() => setTf(t.id)}
+                className={cx(
+                  'min-h-[52px] flex-1 rounded-2xl border-2 text-xl font-black transition focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300',
+                  t.id === tf ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-lg text-slate-500">{tfInfo.hint}</p>
+
+          <div className="relative mt-3 h-64 sm:h-72">
+            {chart.status === 'loading' && (
+              <div className="flex h-full items-center justify-center text-xl font-bold text-slate-400">그래프를 불러오는 중…</div>
+            )}
+            {chart.status === 'error' && (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                <p className="text-lg font-bold text-red-600">{chart.error}</p>
+                <Button variant="light" size="sm" onClick={() => setTries((n) => n + 1)}>다시 해보기</Button>
+              </div>
+            )}
+            {chart.status === 'ok' && (
+              <LineChart
+                points={chart.points}
+                tf={tf}
+                color={periodTrend.line}
+                fill={periodTrend.fill}
+                label={`${grain.name} ${tfInfo.label} 선 그래프. ${tfInfo.hint}`}
+              />
+            )}
+          </div>
+
+          {stats && chart.status === 'ok' && (
+            <dl className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3 sm:text-center">
+              <div className="flex items-baseline justify-between gap-3 sm:block">
+                <dt className="text-lg font-bold text-slate-500">이 기간 최고</dt>
+                <dd className="tnum text-xl font-black">{formatUsd(stats.high)}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3 sm:block">
+                <dt className="text-lg font-bold text-slate-500">이 기간 최저</dt>
+                <dd className="tnum text-xl font-black">{formatUsd(stats.low)}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3 sm:block">
+                <dt className="text-lg font-bold text-slate-500">기간 변화</dt>
+                <dd className={cx('tnum text-xl font-black', periodTrend.text)}>
+                  <span aria-hidden="true">{periodTrend.arrow} </span>{formatPercent(stats.pct)}
+                </dd>
+              </div>
+            </dl>
+          )}
+        </Card>
+      );
+    }
+
+    // 사기 · 팔기 (현재가로 바로 체결). 왜 하는지 메모도 남긴다
+    function TradeCard({ grain, wallet, qty, onQtyChange, memo, onMemoChange, busy, onTrade }) {
+      const price = grain.price;
+      const cash = wallet ? wallet.cash : 0;
+      const owned = wallet?.holdings?.[grain.id] ?? 0;
+      const total = price == null ? 0 : price * qty;
+      const maxBuy = price ? Math.floor((cash + 1e-6) / price) : 0;
+      const tooExpensive = price != null && total > cash + 1e-6;
+      const ready = wallet != null && price != null && !busy && qty >= 1;
+      return (
+        <Card className="lg:col-span-2">
+          <SectionTitle step="2" badgeTone="onWhite" className="mb-5">몇 개 거래할까요?</SectionTitle>
+
+          <Stepper label="수량" value={qty} onChange={onQtyChange} />
+          <p className="mt-2 text-lg text-slate-500">1개 = {grain.unit || '—'}</p>
+
+          <dl className="mt-5 space-y-3 rounded-2xl bg-slate-50 p-4 text-xl">
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="font-bold text-slate-600">필요한 돈</dt>
+              <dd className="tnum text-3xl font-black text-slate-900">{price == null ? '—' : formatUsd(total)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="font-bold text-slate-600">내 현금으로 최대</dt>
+              <dd className="tnum font-black text-slate-900">{wallet ? `${maxBuy.toLocaleString('ko-KR')}개` : '—'}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="font-bold text-slate-600">내가 가진 {grain.name}</dt>
+              <dd className="tnum font-black text-slate-900">{wallet ? `${owned.toLocaleString('ko-KR')}개` : '—'}</dd>
+            </div>
+          </dl>
+
+          <div className="mt-5">
+            <TextField
+              label="왜 거래하시나요? (메모)"
+              hint="이유를 적어 두면 나중에 복습하기 좋아요."
+              placeholder="예) 요즘 값이 많이 내려서 싸다고 생각해요"
+              value={memo}
+              onChange={onMemoChange}
+              maxLength={200}
+            />
+          </div>
+
+          {tooExpensive && qty > 0 && wallet && (
+            <p role="alert" className="mt-3 text-lg font-bold text-red-600">
+              현금이 모자라요. 최대 {maxBuy.toLocaleString('ko-KR')}개까지 살 수 있어요.
+            </p>
+          )}
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <Button variant="buy" size="lg" disabled={!ready || tooExpensive} onClick={() => onTrade('buy')}>사기</Button>
+            <Button variant="sell" size="lg" disabled={!ready || qty > owned} onClick={() => onTrade('sell')}>팔기</Button>
+          </div>
+          {wallet && owned === 0 && (
+            <p className="mt-3 text-center text-lg text-slate-500">가진 {grain.name}이(가) 없어서 아직 팔 수 없어요.</p>
+          )}
+          {!wallet && (
+            <p className="mt-3 text-center text-lg text-slate-500">내 지갑을 불러오면 사고팔 수 있어요.</p>
+          )}
+        </Card>
+      );
+    }
+
+    // 지금 가진 곡물과 평가액
+    function HoldingsCard({ wallet }) {
+      const positions = wallet?.positions || [];
+      return (
+        <Card>
+          <SectionTitle className="mb-4">📦 내가 가진 곡물</SectionTitle>
+          {!wallet ? (
+            <p className="py-6 text-center text-xl text-slate-400">지갑을 불러오는 중…</p>
+          ) : positions.length === 0 ? (
+            <EmptyState icon="🌾" title="아직 산 곡물이 없어요" hint="위에서 곡물을 골라 첫 거래를 해보세요." />
+          ) : (
+            <ul className="divide-y divide-slate-200">
+              {positions.map((p) => (
+                <li key={p.market} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <span aria-hidden="true" className="text-3xl">{EMOJI_OF[p.market]}</span>
+                    <div>
+                      <p className="text-2xl font-black">{p.name} {p.qty.toLocaleString('ko-KR')}개</p>
+                      <p className="tnum text-lg text-slate-500">지금 1개 {formatPrice(p.price)}</p>
+                    </div>
+                  </div>
+                  <p className="tnum text-2xl font-black">{formatUsd(p.value)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      );
+    }
+
+    // 주문 내역 (새 것부터). 메모도 함께
+    function HistoryCard({ orders, failed }) {
+      return (
+        <Card>
+          <SectionTitle className="mb-4">📒 주문 내역</SectionTitle>
+          {failed ? (
+            <p className="py-6 text-center text-xl text-slate-500">주문 내역을 불러오지 못했어요. 위의 '다시 해보기'를 눌러 주세요.</p>
+          ) : orders == null ? (
+            <p className="py-6 text-center text-xl text-slate-400">불러오는 중…</p>
+          ) : orders.length === 0 ? (
+            <EmptyState icon="📝" title="아직 거래한 적이 없어요" hint="사고팔면 여기에 차곡차곡 쌓여요." />
+          ) : (
+            <ul className="max-h-[28rem] divide-y divide-slate-200 overflow-y-auto pr-1">
+              {orders.map((o) => (
+                <li key={o.id} className="py-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className={cx('rounded-lg px-3 py-1 text-lg font-black text-white', o.side === 'buy' ? 'bg-red-600' : 'bg-blue-600')}>
+                      {o.side === 'buy' ? '매수' : '매도'}
+                    </span>
+                    <span className="text-2xl font-black">{o.name} {o.qty.toLocaleString('ko-KR')}개</span>
+                    <span className="tnum ml-auto text-2xl font-black">{formatUsd(o.amount)}</span>
+                  </div>
+                  <p className="tnum mt-1 text-lg text-slate-500">
+                    {formatTime(o.time)} · 체결가 {formatPrice(o.price)}
+                  </p>
+                  {o.memo && <p className="mt-1 text-lg font-semibold text-slate-700">📝 {o.memo}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    function App() {
+      const [prices, setPrices] = useState([]);       // /api/prices
+      const [wallet, setWallet] = useState(null);     // /api/wallet
+      const [orders, setOrders] = useState(null);     // /api/orders (null = 불러오는 중)
+      const [ordersFailed, setOrdersFailed] = useState(false);
+      const [pricesError, setPricesError] = useState('');
+      const [walletError, setWalletError] = useState('');
+      const [selectedId, setSelectedId] = useState(GRAIN_BASE[0].id);
+      const [qty, setQty] = useState(1);
+      const [memo, setMemo] = useState('');
+      const [busy, setBusy] = useState(false);
+      const [notice, setNotice] = useState(null);
+
+      const loadPrices = useCallback(async () => {
+        try {
+          const data = await api('/prices');
+          if (data.every((g) => g.price == null)) throw new Error('지금 곡물 시세를 가져오지 못했어요. 잠시 후 다시 해 주세요.');
+          setPrices(data);
+          setPricesError('');
+        } catch (e) {
+          setPricesError(e.message);
+        }
+      }, []);
+
+      const loadWallet = useCallback(async () => {
+        try {
+          setWallet(await api('/wallet'));
+          setWalletError('');
+        } catch (e) {
+          setWalletError(e.message);
+        }
+      }, []);
+
+      const loadOrders = useCallback(async () => {
+        try {
+          setOrders(await api('/orders'));
+          setOrdersFailed(false);
+        } catch (e) {
+          setOrdersFailed(true);
+          setWalletError((old) => old || e.message);
+        }
+      }, []);
+
+      // 처음 열 때 한 번, 그 뒤로는 30초마다 시세와 지갑(평가액)을 새로 받는다
+      useEffect(() => {
+        loadPrices();
+        loadWallet();
+        loadOrders();
+        const timer = setInterval(() => { loadPrices(); loadWallet(); }, 30000);
+        return () => clearInterval(timer);
+      }, []);
+
+      // 가격이 오기 전에도 버튼은 보이게, 서버 값이 오면 덧씌운다
+      const grains = useMemo(
+        () => GRAIN_BASE.map((base) => ({ ...base, price: null, ...(prices.find((p) => p.id === base.id) || {}) })),
+        [prices]
+      );
+      const grain = grains.find((g) => g.id === selectedId);
+
+      const say = (text, tone = 'ok') => setNotice({ text, tone });
+
+      async function trade(side) {
+        setBusy(true);
+        try {
+          const data = await api('/order', { method: 'POST', body: { market: selectedId, side, qty, memo } });
+          setWallet(data.wallet);
+          setWalletError('');
+          setMemo('');
+          await loadOrders();
+          say(`${grain.name} ${data.order.qty}개를 ${formatPrice(data.order.price)}에 ${side === 'buy' ? '샀어요' : '팔았어요'}. (${formatUsd(data.order.amount)})`);
+        } catch (e) {
+          say(e.message, 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function resetAll() {
+        if (!window.confirm('가진 곡물과 주문 내역이 모두 지워지고, 현금 $1,000으로 처음부터 다시 시작해요.\n계속할까요?')) return;
+        setBusy(true);
+        try {
+          setWallet(await api('/reset', { method: 'POST' }));
+          setWalletError('');
+          setOrders([]);
+          setOrdersFailed(false);
+          say('처음부터 다시 시작해요. 현금 $1,000이 준비됐어요.');
+        } catch (e) {
+          say(e.message, 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      return (
+        <div className="sea min-h-screen">
+          <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+            <Header />
+            {pricesError && <ErrorBanner message={pricesError} onRetry={loadPrices} />}
+            {walletError && <ErrorBanner message={walletError} onRetry={() => { loadWallet(); loadOrders(); }} />}
+            <WalletBar wallet={wallet} />
+            <GrainPicker grains={grains} selectedId={selectedId} onSelect={setSelectedId} />
+
+            <div className="grid gap-5 lg:grid-cols-5">
+              <PriceCard grain={grain} />
+              <TradeCard
+                grain={grain}
+                wallet={wallet}
+                qty={qty}
+                onQtyChange={setQty}
+                memo={memo}
+                onMemoChange={setMemo}
+                busy={busy}
+                onTrade={trade}
+              />
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <HoldingsCard wallet={wallet} />
+              <HistoryCard orders={orders} failed={ordersFailed} />
+            </div>
+
+            <Footer onReset={resetAll} busy={busy} />
+          </main>
+          <Toast notice={notice} onClose={() => setNotice(null)} />
+        </div>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
