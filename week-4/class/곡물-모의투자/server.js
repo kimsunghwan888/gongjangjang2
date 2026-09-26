@@ -279,7 +279,7 @@ app.use((err, _req, res, _next) => {
 // ── Startup ──────────────────────────────────────────
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`\n🌾 곡물 모의투자 서버 시작`);
+    console.log(`\n🌾 5번 곡물 모의투자 앱 서버 시작`);
     console.log(`📍 http://localhost:${PORT}`);
     console.log(`🗄️  저장창고(Supabase): ${SUPABASE_URL && SUPABASE_KEY ? '접속 정보 있음' : '접속 정보 없음 (.env 확인)'}\n`);
   });
