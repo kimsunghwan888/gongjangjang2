@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>6번 원유 모의투자 앱</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ========================================
+    // 🔧 Constants & Helpers
+    // ========================================
+    const OILS = [
+      { id: 'wti', name: 'WTI' },
+      { id: 'brent', name: '브렌트유' },
+      { id: 'dubai', name: 'Dubai유' }
+    ];
+
+    const TIMEFRAMES = [
+      { id: 'day', label: '일봉', unit: '일' },
+      { id: 'week', label: '주봉', unit: '주' },
+      { id: 'month', label: '월봉', unit: '개월' }
+    ];
+
+    // 한국식 색: 오르면 빨강, 내리면 파랑
+    const UP_COLOR = '#ef4444';
+    const DOWN_COLOR = '#2563eb';
+    const MA_COLORS = ['#f59e0b', '#059669', '#7c3aed'];
+    const REFRESH_MS = 30 * 1000;   // 현재가·지갑을 새로 받는 간격
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmt = (n) => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatToday = () => {
+      const d = new Date();
+      return `${d.getFullYear()}년 ${pad(d.getMonth() + 1)}월 ${pad(d.getDate())}일`;
+    };
+    const formatTime = (iso) => {
+      const d = new Date(iso);
+      return `${pad(d.getMonth() + 1)}월 ${pad(d.getDate())}일 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    const toneOf = (n) => (n > 0 ? 'text-red-600' : n < 0 ? 'text-blue-600' : 'text-slate-500');
+    const arrowOf = (n) => (n > 0 ? '▲' : n < 0 ? '▼' : '');
+    const signOf = (n) => (n > 0 ? '+' : n < 0 ? '-' : '');
+
+    // 서버(/api/...)에 물어보고, 실패하면 서버가 준 안내 문구를 그대로 던진다
+    async function api(url, options) {
+      let res;
+      try {
+        res = await fetch(url, options);
+      } catch {
+        throw new Error('서버에 연결하지 못했어요.');
+      }
+      const json = await res.json().catch(() => null);
+      if (!json || !json.success) {
+        const err = new Error((json && json.message) || '문제가 생겼어요. 잠시 후 다시 해 주세요.');
+        err.status = res.status;
+        throw err;
+      }
+      return json.data;
+    }
+
+    // ========================================
+    // 🪝 Custom Hooks
+    // ========================================
+    // 오늘 날짜: 자정이 지나면 저절로 바뀐다 (컴퓨터가 절전에서 깨어나 화면으로 돌아올 때도 바로 맞춘다)
+    function useToday() {
+      const [today, setToday] = useState(formatToday);
+      useEffect(() => {
+        const update = () => setToday(formatToday());
+        const timer = setInterval(update, 30 * 1000);
+        document.addEventListener('visibilitychange', update);
+        return () => {
+          clearInterval(timer);
+          document.removeEventListener('visibilitychange', update);
+        };
+      }, []);
+      return today;
+    }
+
+    // 고른 원유의 현재가 (30초마다 새로 받는다)
+    function useQuote(oilId) {
+      const [state, setState] = useState({ data: null, message: '' });
+      useEffect(() => {
+        let alive = true;
+        setState({ data: null, message: '' });
+        const load = () => api(`/api/price?oil=${oilId}`)
+          .then((data) => { if (alive) setState({ data, message: '' }); })
+          .catch((err) => { if (alive) setState((s) => ({ data: s.data, message: err.message })); });
+        load();
+        const timer = setInterval(load, REFRESH_MS);
+        return () => { alive = false; clearInterval(timer); };
+      }, [oilId]);
+      return state;
+    }
+
+    // ========================================
+    // 🎨 Design System
+    // ========================================
+    function OilButton({ label, selected, onClick }) {
+      return (
+        <button
+          type="button"
+          onClick={onClick}
+          aria-pressed={selected}
+          className={`w-full rounded-2xl px-2 py-4 text-xl font-bold shadow-lg transition sm:px-6 sm:py-5 sm:text-2xl
+            focus:outline-none focus-visible:ring-4 focus-visible:ring-white
+            ${selected
+              ? 'bg-white text-blue-700 scale-105'
+              : 'bg-blue-500 text-white hover:bg-blue-400 active:scale-95'}`}
+        >
+          {label}
+        </button>
+      );
+    }
+
+    function TimeframeTabs({ value, onChange }) {
+      return (
+        <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1.5" role="group" aria-label="봉 종류">
+          {TIMEFRAMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onChange(t.id)}
+              aria-pressed={value === t.id}
+              className={`rounded-xl py-2.5 text-lg font-bold transition
+                focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300
+                ${value === t.id ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:bg-white'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function Card({ title, children, className = '' }) {
+      return (
+        <section className={`w-full rounded-3xl bg-white p-5 shadow-xl sm:p-6 ${className}`}>
+          {title && <h2 className="mb-4 text-2xl font-black text-slate-900">{title}</h2>}
+          {children}
+        </section>
+      );
+    }
+
+    function Notice({ message, onRetry }) {
+      return (
+        <div className="flex flex-col items-center gap-3 rounded-2xl bg-slate-50 px-5 py-6 text-center">
+          <p className="text-lg font-bold text-slate-700">{message}</p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-xl bg-blue-600 px-6 py-3 text-lg font-bold text-white hover:bg-blue-500 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+            >
+              다시 불러오기
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    function Row({ label, value }) {
+      return (
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-lg text-slate-500">{label}</dt>
+          <dd className="text-2xl font-bold text-slate-900">{value}</dd>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 🧩 Chart
+    // ========================================
+    // 캔들(봉) + 이동평균선. 글자·색은 라이브러리(lightweight-charts) 설정으로 그린다
+    function CandleChart({ candles, maPeriods }) {
+      const boxRef = useRef(null);
+
+      useEffect(() => {
+        const chart = LightweightCharts.createChart(boxRef.current, {
+          autoSize: true,
+          layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#334155', fontSize: 13 },
+          grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#e2e8f0' } },
+          rightPriceScale: { borderColor: '#cbd5e1' },
+          timeScale: { borderColor: '#cbd5e1', rightOffset: 2 },
+          localization: { locale: 'ko-KR' }
+        });
+
+        const candleSeries = chart.addCandlestickSeries({
+          upColor: UP_COLOR, borderUpColor: UP_COLOR, wickUpColor: UP_COLOR,
+          downColor: DOWN_COLOR, borderDownColor: DOWN_COLOR, wickDownColor: DOWN_COLOR
+        });
+        candleSeries.setData(candles.map((c) => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close })));
+
+        maPeriods.forEach((p, i) => {
+          const line = chart.addLineSeries({
+            color: MA_COLORS[i], lineWidth: 2,
+            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false
+          });
+          line.setData(candles.filter((c) => c[`ma${p}`] != null).map((c) => ({ time: c.date, value: c[`ma${p}`] })));
+        });
+
+        // 창 크기가 바뀌면 봉이 한쪽으로 몰리지 않게 다시 맞춘다
+        const watcher = new ResizeObserver(() => chart.timeScale().fitContent());
+        watcher.observe(boxRef.current);
+        chart.timeScale().fitContent();
+        return () => { watcher.disconnect(); chart.remove(); };
+      }, [candles, maPeriods]);
+
+      return <div ref={boxRef} className="h-full w-full" />;
+    }
+
+    function PriceTag({ data }) {
+      const { price, change, changePct } = data;
+      return (
+        <div className="text-right">
+          <p className="text-4xl font-black text-slate-900">${fmt(price)}</p>
+          {change != null && (
+            <p className={`text-lg font-bold ${toneOf(change)}`}>
+              어제보다 {arrowOf(change)} {fmt(Math.abs(change))} ({signOf(changePct)}{fmt(Math.abs(changePct))}%)
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    // ========================================
+    // 📄 Page Components
+    // ========================================
+    function OilChartCard({ oil, quote }) {
+      const [tf, setTf] = useState('day');
+      const [state, setState] = useState({ status: 'loading', data: null, message: '', canRetry: false });
+      const [attempt, setAttempt] = useState(0);
+
+      useEffect(() => {
+        let alive = true;
+        setState({ status: 'loading', data: null, message: '', canRetry: false });
+        api(`/api/chart?oil=${oil.id}&tf=${tf}`)
+          .then((data) => { if (alive) setState({ status: 'ok', data, message: '', canRetry: false }); })
+          .catch((err) => {
+            if (alive) setState({ status: 'error', data: null, message: err.message, canRetry: !err.status || err.status >= 500 });
+          });
+        return () => { alive = false; };
+      }, [oil.id, tf, attempt]);
+
+      const unit = TIMEFRAMES.find((t) => t.id === tf).unit;
+
+      return (
+        <Card>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-3xl font-black text-slate-900">{oil.name}</h2>
+              <p className="mt-1 text-base text-slate-500">1배럴(약 159리터) · 가격은 달러($)</p>
+            </div>
+            {quote.data && <PriceTag data={quote.data} />}
+          </div>
+
+          <TimeframeTabs value={tf} onChange={setTf} />
+
+          <div className="relative mt-4 h-[340px] sm:h-[420px]">
+            {state.status === 'loading' && (
+              <div className="flex h-full items-center justify-center text-xl font-bold text-slate-400">
+                불러오는 중…
+              </div>
+            )}
+            {state.status === 'error' && (
+              <div className="flex h-full items-center justify-center">
+                <Notice message={state.message} onRetry={state.canRetry ? () => setAttempt((n) => n + 1) : null} />
+              </div>
+            )}
+            {state.status === 'ok' && <CandleChart candles={state.data.candles} maPeriods={state.data.maPeriods} />}
+          </div>
+
+          {state.status === 'ok' && (
+            <>
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-lg font-bold text-slate-700">
+                {state.data.maPeriods.map((p, i) => (
+                  <span key={p} className="inline-flex items-center gap-2">
+                    <span className="inline-block h-1.5 w-7 rounded" style={{ backgroundColor: MA_COLORS[i] }} />
+                    {p}{unit} 평균선
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-base text-slate-500">
+                <span className="font-bold text-red-500">빨간 봉</span>은 오른 때, <span className="font-bold text-blue-600">파란 봉</span>은 내린 때예요. 선은 최근 가격의 평균이에요.
+              </p>
+              <p className="mt-1 text-sm text-slate-400">시세 출처: 야후 파이낸스 (약 15분 늦게 반영돼요)</p>
+            </>
+          )}
+        </Card>
+      );
+    }
+
+    // 사기(매수) · 팔기(매도): 수량과 메모(왜 샀는지)를 적고 버튼을 누른다
+    function TradePanel({ oil, quote, wallet, onOrdered }) {
+      const [qty, setQty] = useState('1');
+      const [memo, setMemo] = useState('');
+      const [busy, setBusy] = useState(false);
+      const [result, setResult] = useState(null);
+
+      const parsed = Number(qty);
+      const validQty = qty !== '' && Number.isInteger(parsed) && parsed >= 1;
+      const price = quote.data ? quote.data.price : null;
+      const held = wallet.data && wallet.data.holdings[oil.id] ? wallet.data.holdings[oil.id] : 0;
+      const canTrade = price != null && !busy;
+
+      async function submit(side) {
+        if (!validQty) {
+          setResult({ ok: false, text: '수량은 1 이상의 정수(소수점 없이)로 넣어 주세요.' });
+          return;
+        }
+        setBusy(true);
+        setResult(null);
+        try {
+          const data = await api('/api/order', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ market: oil.id, side, qty: parsed, memo })
+          });
+          onOrdered(data);
+          const after = data.wallet.cash;
+          const before = side === 'buy' ? after + data.order.amount : after - data.order.amount;
+          setResult({
+            ok: true,
+            text: `${oil.name} ${data.order.qty}배럴을 $${fmt(data.order.price)}에 ${side === 'buy' ? '샀어요' : '팔았어요'}. (금액 $${fmt(data.order.amount)})`,
+            detail: `잔고 $${fmt(before)} → $${fmt(after)} (${side === 'buy' ? '줄었어요' : '늘었어요'})`
+          });
+          setMemo('');
+        } catch (err) {
+          setResult({ ok: false, text: err.message });
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      const stepBtn = 'w-14 shrink-0 rounded-xl bg-slate-100 text-3xl font-bold text-slate-700 hover:bg-slate-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300';
+
+      return (
+        <Card title="사기 · 팔기 (매수 · 매도)">
+          <dl className="grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4">
+            <div>
+              <dt className="text-base text-slate-500">지금 가격 (1배럴)</dt>
+              <dd className="text-2xl font-black text-slate-900">{price != null ? `$${fmt(price)}` : '-'}</dd>
+            </div>
+            <div>
+              <dt className="text-base text-slate-500">가지고 있는 {oil.name}</dt>
+              <dd className="text-2xl font-black text-slate-900">{held}배럴</dd>
+            </div>
+          </dl>
+
+          {price == null && (
+            <p className="mt-3 text-lg font-bold text-slate-500">{quote.message || '가격을 불러오는 중…'}</p>
+          )}
+
+          <label className="mt-5 block text-lg font-bold text-slate-700" htmlFor="qty">몇 배럴?</label>
+          <div className="mt-2 flex items-stretch gap-2">
+            <button type="button" aria-label="수량 줄이기" className={stepBtn}
+              onClick={() => setQty(String(Number.isInteger(parsed) && parsed > 1 ? parsed - 1 : 1))}>−</button>
+            <input
+              id="qty" type="number" inputMode="numeric" min="1" step="1"
+              value={qty} onChange={(e) => setQty(e.target.value)}
+              className="min-w-0 flex-1 rounded-xl border-2 border-slate-300 px-3 py-3 text-center text-2xl font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
+            />
+            <button type="button" aria-label="수량 늘리기" className={stepBtn}
+              onClick={() => setQty(String(Number.isInteger(parsed) && parsed >= 1 ? parsed + 1 : 1))}>+</button>
+          </div>
+          <p className="mt-2 text-lg text-slate-600">
+            예상 금액 <span className="font-bold text-slate-900">{validQty && price != null ? `$${fmt(parsed * price)}` : '-'}</span>
+          </p>
+
+          <label className="mt-4 block text-lg font-bold text-slate-700" htmlFor="memo">메모: 왜 사고(팔고) 싶으세요?</label>
+          <input
+            id="memo" type="text" maxLength={200}
+            value={memo} onChange={(e) => setMemo(e.target.value)}
+            placeholder="예: 값이 너무 떨어진 것 같아서"
+            className="mt-2 w-full rounded-xl border-2 border-slate-300 px-4 py-3 text-lg text-slate-900 focus:border-blue-500 focus:outline-none"
+          />
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button
+              type="button" disabled={!canTrade} onClick={() => submit('buy')}
+              className="rounded-2xl bg-red-500 py-4 text-2xl font-black text-white shadow-lg transition hover:bg-red-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300"
+            >
+              매수 (사기)
+            </button>
+            <button
+              type="button" disabled={!canTrade} onClick={() => submit('sell')}
+              className="rounded-2xl bg-blue-600 py-4 text-2xl font-black text-white shadow-lg transition hover:bg-blue-500 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+            >
+              매도 (팔기)
+            </button>
+          </div>
+
+          {result && (
+            <p
+              role="status"
+              className={`mt-4 rounded-xl px-4 py-3 text-lg font-bold ${result.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}
+            >
+              {result.text}
+              {result.detail && <span className="mt-1 block">{result.detail}</span>}
+            </p>
+          )}
+        </Card>
+      );
+    }
+
+    // 내 지갑: 현금 + 원유 평가액 + 수익률 (계산은 서버가 한다)
+    function WalletCard({ wallet, onRetry }) {
+      const { status, data, message } = wallet;
+      return (
+        <Card title="내 지갑">
+          {status === 'loading' && <p className="text-lg font-bold text-slate-400">불러오는 중…</p>}
+          {status === 'error' && <Notice message={message} onRetry={onRetry} />}
+          {status === 'ok' && (
+            <>
+              <dl className="flex flex-col gap-3">
+                <Row label="잔고 (현금)" value={`$${fmt(data.cash)}`} />
+                <Row label="원유 평가액" value={`$${fmt(data.holdingsValue)}`} />
+              </dl>
+
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                <p className="text-base font-bold text-slate-500">수익률</p>
+                <p className={`text-4xl font-black ${toneOf(data.profitRate)}`}>
+                  {arrowOf(data.profitRate)} {signOf(data.profitRate)}{fmt(Math.abs(data.profitRate * 100))}%
+                </p>
+                <p className={`text-lg font-bold ${toneOf(data.profit)}`}>
+                  {data.profit > 0 ? '벌었어요 ' : data.profit < 0 ? '잃었어요 ' : '아직 그대로예요 '}{signOf(data.profit)}${fmt(Math.abs(data.profit))}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  총 자산 ${fmt(data.totalAsset)} · (현금 + 원유 평가액 − ${fmt(data.startCash)}) ÷ ${fmt(data.startCash)}
+                </p>
+              </div>
+
+              {data.positions.length > 0 && (
+                <>
+                  <p className="mt-4 text-base font-bold text-slate-500">가지고 있는 원유</p>
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {data.positions.map((p) => (
+                      <li key={p.market} className="flex items-baseline justify-between rounded-xl bg-blue-50 px-4 py-3 text-lg">
+                        <span className="font-bold text-slate-900">{p.name} {p.qty}배럴</span>
+                        <span className="text-slate-600">${fmt(p.value)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          )}
+        </Card>
+      );
+    }
+
+    // 주문 내역: 새 것이 맨 위
+    function OrdersCard({ orders, onRetry }) {
+      const { status, data, message } = orders;
+      return (
+        <Card title="주문 내역">
+          {status === 'loading' && <p className="text-lg font-bold text-slate-400">불러오는 중…</p>}
+          {status === 'error' && <Notice message={message} onRetry={onRetry} />}
+          {status === 'ok' && data.length === 0 && (
+            <p className="rounded-2xl bg-slate-50 px-5 py-6 text-center text-lg font-bold text-slate-500">
+              아직 주문이 없어요. 위에서 사거나 팔아 보세요.
+            </p>
+          )}
+          {data.length > 0 && (
+            <ul className="flex max-h-[520px] flex-col gap-3 overflow-y-auto">
+              {data.map((o) => (
+                <li key={o.id} className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      <span className={`rounded-lg px-2.5 py-1 text-base font-bold ${o.side === 'buy' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {o.side === 'buy' ? '매수' : '매도'}
+                      </span>
+                      <span className="text-xl font-black text-slate-900">{o.name}</span>
+                    </span>
+                    <span className="text-sm text-slate-500">{formatTime(o.time)}</span>
+                  </div>
+                  <p className="mt-2 text-lg text-slate-700">
+                    {o.qty}배럴 × ${fmt(o.price)} = <span className="font-bold text-slate-900">${fmt(o.amount)}</span>
+                  </p>
+                  {o.memo && <p className="mt-1 text-base text-slate-500">메모: {o.memo}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      );
+    }
+
+    function HomePage() {
+      const [selectedId, setSelectedId] = useState('wti');
+      const oil = OILS.find((o) => o.id === selectedId);
+      const quote = useQuote(selectedId);
+
+      const [wallet, setWallet] = useState({ status: 'loading', data: null, message: '' });
+      const [orders, setOrders] = useState({ status: 'loading', data: [], message: '' });
+
+      // 일시적으로 실패해도 이미 받은 값은 그대로 둔다
+      const loadWallet = useCallback(async () => {
+        try {
+          setWallet({ status: 'ok', data: await api('/api/wallet'), message: '' });
+        } catch (err) {
+          setWallet((w) => (w.data ? w : { status: 'error', data: null, message: err.message }));
+        }
+      }, []);
+
+      const loadOrders = useCallback(async () => {
+        try {
+          setOrders({ status: 'ok', data: await api('/api/orders'), message: '' });
+        } catch (err) {
+          setOrders((o) => ({ status: 'error', data: o.data, message: err.message }));
+        }
+      }, []);
+
+      useEffect(() => {
+        loadWallet();
+        loadOrders();
+        const timer = setInterval(loadWallet, REFRESH_MS);
+        return () => clearInterval(timer);
+      }, [loadWallet, loadOrders]);
+
+      const handleOrdered = ({ wallet: newWallet }) => {
+        setWallet({ status: 'ok', data: newWallet, message: '' });
+        loadOrders();
+      };
+
+      return (
+        <main className="mx-auto flex w-full max-w-6xl flex-col items-center px-4 pb-36 pt-12 sm:px-6 sm:pt-16">
+          <h1 className="text-center text-4xl font-black text-white sm:text-5xl">
+            6번 원유 모의투자 앱
+          </h1>
+
+          <div className="mt-10 grid w-full max-w-3xl grid-cols-3 gap-3 sm:gap-5">
+            {OILS.map((o) => (
+              <OilButton
+                key={o.id}
+                label={o.name}
+                selected={selectedId === o.id}
+                onClick={() => setSelectedId(o.id)}
+              />
+            ))}
+          </div>
+
+          <div className="mt-8 grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-5">
+            <div className="flex min-w-0 flex-col gap-6 lg:col-span-3">
+              <OilChartCard key={oil.id} oil={oil} quote={quote} />
+              <TradePanel key={`trade-${oil.id}`} oil={oil} quote={quote} wallet={wallet} onOrdered={handleOrdered} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+              <WalletCard
+                wallet={wallet}
+                onRetry={() => { setWallet({ status: 'loading', data: null, message: '' }); loadWallet(); }}
+              />
+              <OrdersCard
+                orders={orders}
+                onRetry={() => { setOrders((o) => ({ ...o, status: 'loading' })); loadOrders(); }}
+              />
+            </div>
+          </div>
+        </main>
+      );
+    }
+
+    // ========================================
+    // 🚀 App
+    // ========================================
+    // 화면 맨 아래에 붙어 있는 막대: 가운데 "처음으로" 버튼 + 그 아래 오늘 날짜
+    function DateBar() {
+      const today = useToday();
+      return (
+        <footer className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 bg-blue-900 px-4 py-3 shadow-2xl">
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="rounded-full bg-white px-6 py-2 text-lg font-bold text-blue-800 shadow transition hover:bg-blue-50 active:scale-95 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+          >
+            ↑ 처음으로
+          </button>
+          <p className="text-xl font-bold text-white">{today}</p>
+        </footer>
+      );
+    }
+
+    function App() {
+      return (
+        <div className="min-h-screen bg-blue-700">
+          <HomePage />
+          <DateBar />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
