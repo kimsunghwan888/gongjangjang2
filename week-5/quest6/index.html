@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>헬시 에이전트 리모컨</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script>window.react = window.React;</script>
+  <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <style>
+    body { background: #e2e8f0; -webkit-tap-highlight-color: transparent; }
+    @keyframes pop { 0% { transform: scale(.4); opacity: 0 } 60% { transform: scale(1.15); opacity: 1 } 100% { transform: scale(1) } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: none } }
+    @keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,.5) } 100% { box-shadow: 0 0 0 16px rgba(16,185,129,0) } }
+    .pop { animation: pop .5s ease-out both }
+    .fade-up { animation: fadeUp .35s ease-out both }
+    .ring-pulse { animation: ring 1.2s infinite }
+    .no-scrollbar::-webkit-scrollbar { display: none }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks & Icons
+    // ========================================
+    const { useState, useEffect, useRef, useMemo } = React;
+    const Icon = (name) => (window.LucideReact && window.LucideReact[name]) || (() => null);
+    const Leaf = Icon('Leaf'), Mail = Icon('Mail'), Mic = Icon('Mic'), Send = Icon('Send'),
+      ChevronDown = Icon('ChevronDown'), TrendingUp = Icon('TrendingUp'), Sparkles = Icon('Sparkles'),
+      CalendarDays = Icon('CalendarDays'), ImageIcon = Icon('Image'), FileText = Icon('FileText'),
+      Loader2 = Icon('Loader2'), CheckCircle2 = Icon('CheckCircle2'), Bot = Icon('Bot'),
+      Search = Icon('Search'), MessageSquare = Icon('MessageSquare'), Tag = Icon('Tag'),
+      Flame = Icon('Flame'), LogOut = Icon('LogOut'), Wand2 = Icon('Wand2'), Copy = Icon('Copy'),
+      Terminal = Icon('Terminal'), Radio = Icon('Radio'), BarChart3 = Icon('BarChart3'), Clock = Icon('Clock');
+
+    // ========================================
+    // 🗂️ Mock Data
+    // ========================================
+    const TOP_SALES = [
+      ['오메가3 rTG 1200', '정어리·멸치 오일', 48200, 9120, ['배송이 빨라요', '비린내가 없어요', '가성비 좋아요', '부모님 선물로 샀어요', '재구매 중']],
+      ['프리미엄 루테인 지아잔틴', '마리골드 추출물', 41300, 7410, ['눈 피로가 줄었어요', '알이 작아서 좋아요', '꾸준히 먹는 중', '포장이 꼼꼼해요', '가격 대비 만족']],
+      ['저분자 콜라겐 펩타이드', '피쉬 콜라겐', 39800, 8830, ['맛이 거부감 없어요', '피부 결이 좋아진 듯', '스틱이라 간편', '가족이 같이 먹어요', '재구매 의사 있음']],
+      ['밀크씨슬 간건강', '실리마린', 36100, 6240, ['피로감이 덜해요', '술자리 전에 챙겨요', '알약 크기 적당', '배송 빠름', '정기구독 중']],
+      ['액티브 비타민D 5000IU', '비타민D3', 33500, 5980, ['햇빛 부족해서 구매', '작은 캡슐이라 편해요', '오래 먹을 수 있어요', '가성비 최고', '병원 추천']],
+      ['유산균 100억 프로바이오', '락토바실러스', 31200, 7020, ['배변 활동이 규칙적', '냉장 배송 좋아요', '아이도 잘 먹어요', '맛이 괜찮아요', '꾸준히 복용']],
+      ['쏘팔메토 옥타코사놀', '쏘팔메토 추출물', 28700, 3410, ['아버지가 만족', '야간 불편이 줄었어요', '알이 큼', '선물용으로 좋아요', '재구매']],
+      ['마그네슘 글리시네이트', '마그네슘', 27900, 4890, ['눈 떨림이 사라졌어요', '숙면에 도움', '위에 부담 없어요', '정제 작아요', '추천합니다']],
+      ['저당 홍삼 스틱', '6년근 홍삼', 26400, 5230, ['쓴맛이 덜해요', '아침 대용 간편', '명절 선물로 구매', '포장 고급스러워요', '피곤할 때 먹어요']],
+      ['NMN 항산화 부스터', 'NMN·레스베라트롤', 24100, 4170, ['요즘 핫해서 구매', '컨디션이 좋아진 느낌', '가격이 조금 부담', '캡슐 작음', '2개월째 복용']],
+    ].map(([name, ingredient, sales, reviews, comments], i) => ({
+      id: 's' + i, name, ingredient, sales, reviews, comments,
+      searches: 120000 - i * 7400 + (i % 3) * 1900,
+      tags: [ingredient.split('·')[0], '쿠팡로켓', i % 2 ? '가성비' : '프리미엄'],
+    }));
+
+    const TOP_REVENUE = [
+      ['저분자 콜라겐 펩타이드', '피쉬 콜라겐', 1980], ['오메가3 rTG 1200', '정어리·멸치 오일', 1760],
+      ['저당 홍삼 스틱', '6년근 홍삼', 1520], ['프리미엄 루테인 지아잔틴', '마리골드 추출물', 1340],
+      ['NMN 항산화 부스터', 'NMN·레스베라트롤', 1210], ['밀크씨슬 간건강', '실리마린', 1090],
+      ['유산균 100억 프로바이오', '락토바실러스', 980], ['쏘팔메토 옥타코사놀', '쏘팔메토 추출물', 910],
+      ['액티브 비타민D 5000IU', '비타민D3', 850], ['마그네슘 글리시네이트', '마그네슘', 790],
+    ].map(([name, ingredient, rev], i) => ({
+      id: 'r' + i, name, ingredient, sales: rev, unit: '백만원', reviews: 3000 + (10 - i) * 610,
+      searches: 98000 - i * 5100,
+      comments: ['효과를 느껴요', '배송이 빨라요', '가격이 합리적', '포장 만족', '재구매 예정'],
+      tags: [ingredient.split('·')[0], '매출상위', i < 3 ? '급상승' : '스테디'],
+    }));
+
+    const SURGE_INGREDIENTS = [
+      { name: '쏘팔메토', change: '+62%', note: '중장년 남성 케어 수요 확대' },
+      { name: 'NMN', change: '+48%', note: '항노화 키워드 검색량 동반 상승' },
+      { name: '마리골드(루테인)', change: '+35%', note: '디지털 눈 피로 이슈' },
+    ];
+    const NEW_INGREDIENTS = [
+      { name: '우롤리틴 A', note: '미토콘드리아 케어 신규 소재, 국내 수입 초기 단계' },
+      { name: '사찰라 사포닌', note: '혈당 관리 컨셉 해외 트렌드, 수입 신고 시작' },
+    ];
+
+    const MONTH_LABELS = ['4개월 전', '3개월 전', '2개월 전', '1개월 전'];
+    const MATCH_ROWS = [
+      { name: '쏘팔메토', imports: [120, 135, 190, 260], show: { day: '목', time: '21:20', brand: '롯데홈쇼핑 · 남성건강' } },
+      { name: 'NMN', imports: [80, 95, 130, 188], show: { day: '토', time: '10:45', brand: 'CJ온스타일 · 항노화' } },
+      { name: '마리골드', imports: [210, 220, 270, 310], show: { day: '화', time: '22:35', brand: 'GS샵 · 눈건강' } },
+      { name: '정어리 오일', imports: [300, 310, 305, 320], show: { day: '수', time: '20:45', brand: '현대홈쇼핑 · 혈행' } },
+      { name: '피쉬 콜라겐', imports: [150, 148, 160, 170], show: { day: '금', time: '23:40', brand: '홈앤쇼핑 · 이너뷰티' } },
+      { name: '락토바실러스', imports: [260, 255, 250, 262], show: { day: '일', time: '09:50', brand: 'NS홈쇼핑 · 장건강' } },
+      { name: '마그네슘', imports: [90, 100, 120, 150], show: { day: '월', time: '21:55', brand: 'CJ온스타일 · 수면' } },
+    ];
+    const surgePct = (r) => Math.round(((r.imports[3] - r.imports[0]) / r.imports[0]) * 100);
+
+    const NAMING = {
+      best: '시그니처 쏘팔메토 옥타 플러스',
+      reason: '타깃(중장년 남성) 직관성 + 핵심 원료 명시 + 프리미엄 뉘앙스',
+      keywords: [
+        { kw: '쏘팔메토 남성 건강', score: 94, volume: '월 42,000' },
+        { kw: '옥타코사놀 쏘팔메토', score: 88, volume: '월 18,500' },
+      ],
+    };
+    const PAGE_MD = `# 시그니처 쏘팔메토 옥타 플러스
+
+> 하루 1캡슐, 남성 활력 루틴
+
+## 핵심 포인트
+- 쏘팔메토 추출물 320mg 함유
+- 옥타코사놀 복합 설계
+- 식약처 기능성 원료 인정
+
+## 섭취 방법
+1일 1회, 1캡슐을 물과 함께 섭취하세요.
+
+## 주의사항
+특이체질·알레르기 체질은 원료를 확인하세요.`;
+
+    const mdToHtml = (md) => md.split('\n').map((l) => {
+      if (l.startsWith('# ')) return `<h1>${l.slice(2)}</h1>`;
+      if (l.startsWith('## ')) return `<h2>${l.slice(3)}</h2>`;
+      if (l.startsWith('> ')) return `<blockquote>${l.slice(2)}</blockquote>`;
+      if (l.startsWith('- ')) return `<li>${l.slice(2)}</li>`;
+      return l.trim() ? `<p>${l}</p>` : '';
+    }).filter(Boolean).join('\n');
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    // ========================================
+    // 🔌 Backend API (server.js)
+    // ========================================
+    if (location.protocol === 'file:') document.title = '서버로 접속하세요 (node server.js → http://localhost:3000)';
+    const store = {
+      get: () => JSON.parse(localStorage.getItem('hs_session') || 'null'),
+      set: (s) => (s ? localStorage.setItem('hs_session', JSON.stringify(s)) : localStorage.removeItem('hs_session')),
+    };
+    async function api(path, { method = 'GET', body } = {}, retry = true) {
+      const s = store.get();
+      const res = await fetch(path, {
+        method, body: body ? JSON.stringify(body) : undefined,
+        headers: { 'Content-Type': 'application/json', ...(s ? { Authorization: `Bearer ${s.accessToken}` } : {}) },
+      });
+      if (res.status === 401 && s && retry && !path.startsWith('/api/auth/')) {
+        const r = await fetch('/api/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: s.refreshToken }) });
+        if (r.ok) { store.set({ ...s, ...(await r.json()).data }); return api(path, { method, body }, false); }
+        store.set(null);
+        window.dispatchEvent(new Event('hs-logout'));
+      }
+      const j = await res.json().catch(() => ({ success: false, message: '서버 응답 오류' }));
+      if (!j.success) throw new Error(j.message || '요청 실패');
+      return j.data;
+    }
+    const KST_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+    const toMarket = ({ coupang, importSurge }) => ({
+      sales: coupang.topBySales.map((p) => ({
+        id: p.id, name: p.title, ingredient: p.ingredient, sales: p.sales, reviews: p.reviewCount, searches: p.searches,
+        comments: p.topReviews.map((r) => r.text), tags: p.tags,
+      })),
+      revenue: coupang.topByRevenue.map((p) => ({
+        id: 'r' + p.id, name: p.title, ingredient: p.ingredient, sales: Math.round(p.revenue / 1e6), unit: '백만원', reviews: p.reviewCount, searches: p.searches,
+        comments: p.topReviews.map((r) => r.text), tags: p.tags,
+      })),
+      surge: importSurge.filter((s) => !s.isNew).map((s) => ({ name: s.ingredient, change: `+${Math.round(s.rate * 100)}%`, note: `수입량 ${s.monthly[0]}→${s.monthly[3]}톤` })),
+      fresh: importSurge.filter((s) => s.isNew).map((s) => ({ name: s.ingredient, note: `4개월 전 수입 없음 → 최근 ${s.monthly[3]}톤 신규 진입` })),
+    });
+    const toMatchRows = (rows) => rows.map((r) => {
+      const b = r.broadcasts[0];
+      const d = b && new Date(Date.parse(b.startsAt) + 9 * 36e5);
+      return {
+        name: r.ingredient, imports: r.monthlyImports, isNew: r.isNew, pct: r.isNew ? 999 : Math.round((r.surgeRate || 0) * 100),
+        show: b ? { day: KST_DAYS[d.getUTCDay()], time: d.toISOString().slice(11, 16), brand: `${b.channel} · ${b.title}` } : null,
+      };
+    });
+    const toOutput = (o) => ({
+      naming: { best: o.productName, reason: o.nameReason, keywords: o.seoKeywords.map((kw, i) => ({ kw, score: 94 - i * 6, volume: '-' })) },
+      md: o.detailMarkdown, images: o.imageUrls || [],
+    });
+    const SERVER_STATUS = { queued: 'collecting', collecting: 'collecting', designing: 'designing', done: 'done', failed: 'idle' };
+
+    const Card = ({ children, className = '' }) => (
+      <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 p-4 ${className}`}>{children}</div>
+    );
+
+    const Badge = ({ children, tone = 'green', className = '' }) => {
+      const tones = {
+        green: 'bg-emerald-50 text-emerald-700', slate: 'bg-slate-100 text-slate-600',
+        red: 'bg-rose-50 text-rose-600', amber: 'bg-amber-50 text-amber-700',
+      };
+      return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${tones[tone]} ${className}`}>{children}</span>;
+    };
+
+    const Button = ({ children, variant = 'primary', size = 'md', disabled, onClick, className = '', type = 'button' }) => {
+      const v = {
+        primary: 'bg-emerald-600 text-white active:bg-emerald-700 shadow-sm shadow-emerald-200',
+        secondary: 'bg-slate-100 text-slate-700 active:bg-slate-200',
+        ghost: 'text-emerald-700 active:bg-emerald-50',
+      };
+      const s = { sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-3 text-base', lg: 'px-5 py-4 text-lg' };
+      return (
+        <button type={type} disabled={disabled} onClick={onClick}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition disabled:opacity-50 ${v[variant]} ${s[size]} ${className}`}>
+          {children}
+        </button>
+      );
+    };
+
+    const Input = ({ label, error, className = '', ...props }) => (
+      <label className="block">
+        {label && <span className="block text-sm font-medium text-slate-700 mb-1">{label}</span>}
+        <input {...props} className={`w-full rounded-xl border px-4 py-3 text-base outline-none focus:ring-2 focus:ring-emerald-400 ${error ? 'border-rose-400' : 'border-slate-200'} ${className}`} />
+        {error && <span role="alert" className="block text-sm text-rose-500 mt-1">{error}</span>}
+      </label>
+    );
+
+    const Accordion = ({ title, subtitle, right, open, onToggle, children }) => (
+      <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
+        <button onClick={onToggle} aria-expanded={open} className="w-full flex items-center gap-3 p-3 text-left active:bg-slate-50">
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-slate-800 truncate">{title}</div>
+            <div className="text-xs text-slate-500">{subtitle}</div>
+          </div>
+          {right}
+          <ChevronDown size={18} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+        {open && <div className="px-3 pb-3 fade-up">{children}</div>}
+      </div>
+    );
+
+    // ========================================
+    // 🧩 Common Components
+    // ========================================
+    const STATUS = {
+      idle: { label: '대기중', color: 'bg-slate-400', step: 0 },
+      collecting: { label: '데이터 수집중', color: 'bg-amber-500', step: 1 },
+      designing: { label: '디자인 생성중', color: 'bg-sky-500', step: 2 },
+      done: { label: '완료', color: 'bg-emerald-500', step: 3 },
+    };
+
+    const Header = ({ email, onLogout, status }) => (
+      <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center gap-2">
+        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center"><Leaf size={18} /></div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-slate-800 leading-tight">헬시 에이전트</div>
+          <div className="text-xs text-slate-500 truncate">{email}</div>
+        </div>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <span className={`w-2 h-2 rounded-full ${STATUS[status].color}`} />{STATUS[status].label}
+        </span>
+        <button onClick={onLogout} aria-label="로그아웃" className="p-2 text-slate-400 active:text-slate-600"><LogOut size={18} /></button>
+      </header>
+    );
+
+    const TABS = [
+      { id: 'control', label: '명령', Icon: Terminal },
+      { id: 'market', label: '시장', Icon: BarChart3 },
+      { id: 'match', label: '매칭', Icon: CalendarDays },
+      { id: 'output', label: 'AI결과', Icon: Sparkles },
+    ];
+
+    const BottomNav = ({ tab, onChange }) => (
+      <nav className="sticky bottom-0 z-20 bg-white border-t border-slate-100 grid grid-cols-4 pb-[env(safe-area-inset-bottom)]">
+        {TABS.map(({ id, label, Icon: I }) => (
+          <button key={id} onClick={() => onChange(id)} aria-current={tab === id ? 'page' : undefined}
+            className={`flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${tab === id ? 'text-emerald-600' : 'text-slate-400'}`}>
+            <I size={22} />{label}
+          </button>
+        ))}
+      </nav>
+    );
+
+    // ========================================
+    // 📄 Page Components
+    // ========================================
+    const AuthScreen = ({ onAuthed }) => {
+      const [email, setEmail] = useState('');
+      const [error, setError] = useState('');
+      const [phase, setPhase] = useState('form'); // form | sending | sent | success
+      const [devLink, setDevLink] = useState('');
+      const timers = useRef([]);
+      useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+      const send = async (e) => {
+        e.preventDefault();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setError('올바른 이메일 주소를 입력해 주세요.');
+        setError('');
+        setPhase('sending');
+        try {
+          const d = await fetch('/api/auth/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }).then((r) => r.json());
+          if (!d.success) throw new Error(d.message);
+          setDevLink(d.devLink || '');
+          if (d.devLink) return verify(d.devLink);
+          setPhase('sent');
+        } catch (err) { setError(err.message || '발송에 실패했어요.'); setPhase('form'); }
+      };
+      const verify = async (link = devLink) => {
+        try {
+          const token = new URL(link).searchParams.get('token');
+          const d = await fetch('/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }).then((r) => r.json());
+          if (!d.success) throw new Error(d.message);
+          store.set({ ...d.data, email: d.data.user.email });
+          setPhase('success');
+          timers.current.push(setTimeout(() => onAuthed(d.data.user.email), 1400));
+        } catch (err) { setError(err.message); setPhase('form'); }
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col justify-center px-6 bg-gradient-to-b from-emerald-50 to-white">
+          {phase === 'success' ? (
+            <div className="text-center">
+              <div className="pop mx-auto w-24 h-24 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-pulse"><CheckCircle2 size={52} /></div>
+              <p className="fade-up mt-6 text-xl font-bold text-slate-800">인증 완료!</p>
+              <p className="fade-up text-slate-500 mt-1">대시보드로 이동합니다…</p>
+            </div>
+          ) : (
+            <div className="fade-up">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mb-6 shadow-lg shadow-emerald-200"><Leaf size={34} /></div>
+              <h1 className="text-2xl font-bold text-slate-800">헬시 에이전트 리모컨</h1>
+              <p className="text-slate-500 mt-1 mb-8">건강식품 리서치·상세페이지 에이전트를 어디서든 제어하세요.</p>
+              {phase === 'sent' ? (
+                <Card className="text-center space-y-3">
+                  <Mail className="mx-auto text-emerald-600" size={32} />
+                  <p className="font-semibold text-slate-800">인증 링크를 보냈어요</p>
+                  {devLink && <p className="text-xs text-amber-600">개발 모드: 메일 발송이 설정되지 않아 실제 메일은 가지 않아요. 아래 버튼으로 바로 인증하세요.</p>}
+                  <p className="text-sm text-slate-500 break-all">{email}</p>
+                  {devLink
+                    ? <Button className="w-full" onClick={() => verify()}>메일의 링크 클릭 (개발 모드)</Button>
+                    : <p className="text-sm text-slate-500">메일함(스팸함 포함)의 링크를 눌러 로그인하세요.</p>}
+                  {error && <p className="text-sm text-rose-600">{error}</p>}
+                  <Button variant="ghost" size="sm" onClick={() => setPhase('form')}>이메일 다시 입력</Button>
+                </Card>
+              ) : (
+                <form onSubmit={send} className="space-y-4" noValidate>
+                  <Input label="이메일" type="email" value={email} placeholder="name@example.com" error={error}
+                    onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+                  <Button type="submit" className="w-full" disabled={phase === 'sending'}>
+                    {phase === 'sending' ? <><Loader2 size={18} className="animate-spin" />발송 중…</> : <><Mail size={18} />인증 링크 발송</>}
+                  </Button>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const ControlTab = ({ status, setStatus, log, setLog, onJob }) => {
+      const [text, setText] = useState('');
+      const [listening, setListening] = useState(false);
+      const timers = useRef([]);
+      const recRef = useRef(null);
+      // 탭 전환으로 언마운트돼도 진행 상태가 멈추지 않도록 타이머는 정리하지 않고 음성 인식만 정리
+      useEffect(() => () => { recRef.current && recRef.current.stop(); }, []);
+
+      const run = async () => {
+        const cmd = text.trim();
+        if (!cmd || (status !== 'idle' && status !== 'done')) return;
+        const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        try {
+          const d = await api('/api/commands', { method: 'POST', body: { command: cmd } });
+          setLog((l) => [{ cmd, at: now }, ...l].slice(0, 5));
+          setText('');
+          setStatus('collecting');
+          onJob(d.jobId);
+        } catch (err) { alert(err.message); }
+      };
+
+      const voice = () => {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) return alert('이 브라우저는 음성 입력을 지원하지 않아요. 텍스트로 입력해 주세요.');
+        if (listening) return recRef.current && recRef.current.stop();
+        const rec = new SR();
+        rec.lang = 'ko-KR';
+        rec.onresult = (e) => setText(e.results[0][0].transcript);
+        rec.onend = () => setListening(false);
+        rec.onerror = () => setListening(false);
+        recRef.current = rec;
+        setListening(true);
+        rec.start();
+      };
+
+      const steps = ['collecting', 'designing', 'done'];
+      const busy = status === 'collecting' || status === 'designing';
+      return (
+        <div className="space-y-4">
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className={`w-12 h-12 rounded-full ${STATUS[status].color} text-white flex items-center justify-center ${busy ? 'ring-pulse' : ''}`}>
+                {busy ? <Loader2 className="animate-spin" /> : status === 'done' ? <CheckCircle2 /> : <Bot />}
+              </div>
+              <div>
+                <div className="text-xs text-slate-500">에이전트 상태</div>
+                <div className="text-lg font-bold text-slate-800">{STATUS[status].label}</div>
+              </div>
+            </div>
+            <div className="flex gap-1.5 mt-4" aria-hidden="true">
+              {steps.map((s) => (
+                <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${STATUS[status].step >= STATUS[s].step ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+              ))}
+            </div>
+            <div className="flex justify-between text-[11px] text-slate-400 mt-1"><span>수집</span><span>디자인</span><span>완료</span></div>
+          </Card>
+
+          <Card>
+            <h2 className="font-bold text-slate-800 mb-2">에이전트에게 작업 시키기</h2>
+            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3}
+              placeholder="예) 쿠팡 최신 트렌드 분석하고 홈쇼핑 일정 매칭해줘"
+              className="w-full rounded-xl border border-slate-200 p-3 outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
+            <div className="flex gap-2 mt-2">
+              <Button variant={listening ? 'primary' : 'secondary'} onClick={voice} className={listening ? 'ring-pulse' : ''}>
+                <Mic size={18} />{listening ? '듣는 중…' : '음성'}
+              </Button>
+              <Button className="flex-1" onClick={run} disabled={!text.trim() || busy}><Send size={18} />명령 전송</Button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {['쿠팡 최신 트렌드 분석하고 홈쇼핑 일정 매칭해줘', '급증 원료로 상세페이지 만들어줘'].map((q) => (
+                <button key={q} onClick={() => setText(q)} className="text-xs bg-emerald-50 text-emerald-700 rounded-full px-3 py-1.5 text-left">{q}</button>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold text-slate-700 mb-2 flex items-center gap-1.5"><Clock size={16} />최근 명령</h3>
+            {log.length === 0
+              ? <p className="text-sm text-slate-400 text-center py-4">아직 전송한 명령이 없어요.</p>
+              : <ul className="divide-y divide-slate-100">{log.map((l, i) => (
+                <li key={i} className="py-2 text-sm text-slate-700 flex gap-2"><span className="text-slate-400 shrink-0">{l.at}</span>{l.cmd}</li>
+              ))}</ul>}
+          </Card>
+        </div>
+      );
+    };
+
+    const RankList = ({ items, valueFmt }) => {
+      const [openId, setOpenId] = useState(null);
+      return (
+        <div className="space-y-2">
+          {items.map((it, i) => (
+            <Accordion key={it.id} open={openId === it.id} onToggle={() => setOpenId(openId === it.id ? null : it.id)}
+              title={<span><span className={`inline-block w-6 font-bold ${i < 3 ? 'text-emerald-600' : 'text-slate-400'}`}>{i + 1}</span>{it.name}</span>}
+              subtitle={it.ingredient} right={<span className="text-sm font-semibold text-slate-700">{valueFmt(it)}</span>}>
+              <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                {[['원료', it.ingredient.split('·')[0]], ['검색수', it.searches.toLocaleString()], ['댓글수', it.reviews.toLocaleString()]].map(([k, v]) => (
+                  <div key={k} className="bg-slate-50 rounded-lg py-2"><div className="text-[11px] text-slate-500">{k}</div><div className="text-sm font-semibold text-slate-800 truncate px-1">{v}</div></div>
+                ))}
+              </div>
+              <div className="text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1"><MessageSquare size={13} />상위 댓글 5개</div>
+              <ol className="space-y-1 mb-3">
+                {it.comments.map((c, j) => <li key={j} className="text-sm text-slate-600 bg-slate-50 rounded-lg px-2 py-1">{j + 1}. {c}</li>)}
+              </ol>
+              <div className="flex flex-wrap gap-1.5">{it.tags.map((t) => <Badge key={t}><Tag size={11} />{t}</Badge>)}</div>
+            </Accordion>
+          ))}
+        </div>
+      );
+    };
+
+    const MarketTab = ({ market }) => {
+      const [mode, setMode] = useState('sales');
+      const m = market || { sales: TOP_SALES, revenue: TOP_REVENUE, surge: SURGE_INGREDIENTS, fresh: NEW_INGREDIENTS };
+      return (
+        <div className="space-y-4">
+          {!market && <div className="bg-amber-50 text-amber-700 text-sm rounded-xl px-3 py-2">샘플 데이터입니다. '명령' 탭에서 리서치를 실행하면 최신 결과로 바뀌어요.</div>}
+          <div className="grid grid-cols-2 bg-slate-200 rounded-xl p-1 text-sm font-semibold">
+            {[['sales', '판매량 TOP 10'], ['revenue', '매출 TOP 10']].map(([id, l]) => (
+              <button key={id} onClick={() => setMode(id)} className={`py-2 rounded-lg transition ${mode === id ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}`}>{l}</button>
+            ))}
+          </div>
+          {mode === 'sales'
+            ? <RankList key="s" items={m.sales} valueFmt={(it) => `${it.sales.toLocaleString()}개`} />
+            : <RankList key="r" items={m.revenue} valueFmt={(it) => `${it.sales.toLocaleString()}${it.unit}`} />}
+
+          <Card>
+            <h3 className="font-bold text-slate-800 flex items-center gap-1.5 mb-3"><Flame size={18} className="text-rose-500" />수입 급증 원료</h3>
+            <ul className="space-y-2">
+              {m.surge.length === 0 && <li className="text-sm text-slate-400">급증 원료가 없어요.</li>}
+              {m.surge.map((s) => (
+                <li key={s.name} className="flex items-center gap-3">
+                  <Badge tone="red"><TrendingUp size={12} />{s.change}</Badge>
+                  <div><div className="font-medium text-slate-800 text-sm">{s.name}</div><div className="text-xs text-slate-500">{s.note}</div></div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+          <Card>
+            <h3 className="font-bold text-slate-800 flex items-center gap-1.5 mb-3"><Search size={18} className="text-emerald-600" />신규 원료 리서치</h3>
+            <ul className="space-y-2">
+              {m.fresh.length === 0 && <li className="text-sm text-slate-400">신규 원료가 없어요.</li>}
+              {m.fresh.map((n) => (
+                <li key={n.name} className="text-sm"><Badge tone="amber" className="mr-2">NEW</Badge><b className="text-slate-800">{n.name}</b><div className="text-xs text-slate-500 mt-0.5">{n.note}</div></li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      );
+    };
+
+    const MatchTab = ({ match }) => {
+      const [onlySurge, setOnlySurge] = useState(false);
+      const [threshold, setThreshold] = useState(30);
+      const all = match || MATCH_ROWS.map((r) => ({ ...r, pct: surgePct(r) }));
+      const rows = useMemo(() => all.filter((r) => !onlySurge || r.pct >= threshold), [all, onlySurge, threshold]);
+      const max = Math.max(1, ...all.flatMap((r) => r.imports));
+      return (
+        <div className="space-y-3">
+          {!match && <div className="bg-amber-50 text-amber-700 text-sm rounded-xl px-3 py-2">샘플 데이터입니다. '명령' 탭에서 리서치를 실행해 보세요.</div>}
+          <Card className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-800">급증 품목만 보기</span>
+              <button role="switch" aria-checked={onlySurge} onClick={() => setOnlySurge(!onlySurge)}
+                className={`w-12 h-7 rounded-full p-0.5 transition ${onlySurge ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                <span className={`block w-6 h-6 bg-white rounded-full shadow transition-transform ${onlySurge ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+            <label className="block text-xs text-slate-500">급증 기준: 4개월 전 대비 +{threshold}% 이상
+              <input type="range" min="10" max="80" step="5" value={threshold} onChange={(e) => setThreshold(+e.target.value)} className="w-full accent-emerald-600" />
+            </label>
+          </Card>
+
+          <div className="overflow-x-auto no-scrollbar rounded-2xl border border-slate-100 bg-white shadow-sm">
+            <table className="min-w-[640px] w-full text-sm">
+              <thead className="bg-slate-800 text-white text-xs">
+                <tr>
+                  <th className="sticky left-0 bg-slate-800 px-3 py-2 text-left z-10">원료</th>
+                  {MONTH_LABELS.map((m) => <th key={m} className="px-3 py-2 text-center whitespace-nowrap">{m}<div className="font-normal opacity-60">수입(톤)</div></th>)}
+                  <th className="px-3 py-2 text-center">증감</th>
+                  <th className="px-3 py-2 text-left bg-emerald-700 whitespace-nowrap"><Radio size={12} className="inline mr-1" />홈쇼핑 방송</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const p = r.pct, hot = p >= threshold;
+                  return (
+                    <tr key={r.name} className={`border-t border-slate-100 ${hot ? 'bg-rose-50/60' : ''}`}>
+                      <td className={`sticky left-0 px-3 py-3 font-semibold whitespace-nowrap z-10 ${hot ? 'bg-rose-50' : 'bg-white'}`}>
+                        {hot && <Flame size={13} className="inline text-rose-500 mr-1" />}{r.name}
+                      </td>
+                      {r.imports.map((v, i) => (
+                        <td key={i} className="px-3 py-3 text-center">
+                          <div className="font-medium text-slate-700">{v}</div>
+                          <div className="h-1 mt-1 rounded-full bg-slate-100"><div className={`h-1 rounded-full ${hot ? 'bg-rose-400' : 'bg-emerald-400'}`} style={{ width: `${(v / max) * 100}%` }} /></div>
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-center"><Badge tone={hot ? 'red' : 'slate'}>{r.isNew ? 'NEW' : `${p >= 0 ? '+' : ''}${p}%`}</Badge></td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {r.show ? (<>
+                          <div className="font-medium text-slate-800">{r.show.day}요일 {r.show.time}</div>
+                          <div className="text-xs text-slate-500">{r.show.brand}</div>
+                        </>) : <span className="text-xs text-slate-400">편성 없음</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {rows.length === 0 && <tr><td colSpan="7" className="text-center text-slate-400 py-8">조건에 맞는 품목이 없어요.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-400 text-center">← 좌우로 스크롤하여 전체 표를 확인하세요 →</p>
+        </div>
+      );
+    };
+
+    const OutputTab = ({ output }) => {
+      const [view, setView] = useState('preview');
+      const [copied, setCopied] = useState(false);
+      const ready = !!output;
+      const NAMING_ = output ? output.naming : NAMING;
+      const PAGE = output ? output.md : PAGE_MD;
+      const html = useMemo(() => mdToHtml(PAGE), [PAGE]);
+      const copy = () => {
+        const text = view === 'html' ? html : PAGE;
+        navigator.clipboard && navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+      };
+      const body = PAGE.split('\n');
+      const banner = output && output.images.find((i) => i.type === 'banner');
+      const subImgs = output ? output.images.filter((i) => i.type !== 'banner') : null;
+      return (
+        <div className="space-y-4">
+          {!ready && <div className="bg-amber-50 text-amber-700 text-sm rounded-xl px-3 py-2">샘플 결과입니다. '명령' 탭에서 작업을 완료하면 최신 결과로 표시돼요.</div>}
+          <Card>
+            <h3 className="font-bold text-slate-800 flex items-center gap-1.5 mb-3"><Wand2 size={18} className="text-emerald-600" />추천 상품명 & SEO</h3>
+            <div className="bg-emerald-50 rounded-xl p-3 mb-3">
+              <div className="text-xs text-emerald-700 font-medium">BEST 네이밍</div>
+              <div className="text-lg font-bold text-slate-900">{NAMING_.best}</div>
+              <div className="text-xs text-slate-500 mt-1">{NAMING_.reason}</div>
+            </div>
+            <div className="space-y-2">
+              {NAMING_.keywords.map((k, i) => (
+                <div key={k.kw} className="flex items-center gap-3 border border-slate-100 rounded-xl p-3">
+                  <span className="w-6 h-6 rounded-full bg-slate-800 text-white text-xs flex items-center justify-center">{i + 1}</span>
+                  <div className="flex-1"><div className="font-semibold text-slate-800 text-sm">{k.kw}</div><div className="text-xs text-slate-500">검색량 {k.volume}</div></div>
+                  <Badge>SEO {k.score}</Badge>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-bold text-slate-800 flex items-center gap-1.5 mb-3"><ImageIcon size={18} className="text-emerald-600" />배너 & 디자인 이미지</h3>
+            {banner
+              ? <img src={banner.url} alt="메인 배너" className="w-full aspect-[16/7] object-cover rounded-xl mb-2" />
+              : <div className="aspect-[16/7] rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex flex-col items-center justify-center mb-2">
+                <Leaf size={28} /><div className="font-bold mt-1">메인 배너 (1200×525)</div><div className="text-xs opacity-80">{NAMING_.best}</div>
+              </div>}
+            <div className="grid grid-cols-3 gap-2">
+              {subImgs
+                ? subImgs.map((i) => <img key={i.type} src={i.url} alt={i.type} className="aspect-square object-cover rounded-xl bg-slate-100" />)
+                : ['성분 인포', '섭취 방법', '인증 마크'].map((t) => (
+                  <div key={t} className="aspect-square rounded-xl bg-slate-100 border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 text-xs gap-1"><ImageIcon size={20} />{t}</div>
+                ))}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-bold text-slate-800 flex items-center gap-1.5 mb-3"><FileText size={18} className="text-emerald-600" />상세페이지 자동 변환</h3>
+            <div className="grid grid-cols-3 bg-slate-100 rounded-lg p-1 text-xs font-semibold mb-3">
+              {[['preview', '미리보기'], ['html', 'HTML'], ['md', 'Markdown']].map(([id, l]) => (
+                <button key={id} onClick={() => setView(id)} className={`py-1.5 rounded-md ${view === id ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}`}>{l}</button>
+              ))}
+            </div>
+            {view === 'preview' ? (
+              <div className="border border-slate-100 rounded-xl p-4 space-y-2">
+                {body.map((l, i) => {
+                  if (l.startsWith('# ')) return <h1 key={i} className="text-xl font-extrabold text-slate-900">{l.slice(2)}</h1>;
+                  if (l.startsWith('## ')) return <h2 key={i} className="text-base font-bold text-emerald-700 pt-2">{l.slice(3)}</h2>;
+                  if (l.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-emerald-400 pl-3 text-slate-500 italic">{l.slice(2)}</blockquote>;
+                  if (l.startsWith('- ')) return <div key={i} className="text-sm text-slate-700 flex gap-2"><span className="text-emerald-500">•</span>{l.slice(2)}</div>;
+                  return l.trim() ? <p key={i} className="text-sm text-slate-600">{l}</p> : null;
+                })}
+              </div>
+            ) : (
+              <div className="relative">
+                <pre className="bg-slate-900 text-emerald-200 text-xs rounded-xl p-3 pt-9 overflow-x-auto whitespace-pre-wrap">{view === 'html' ? html : PAGE}</pre>
+                <button onClick={copy} className="absolute top-2 right-2 bg-slate-700 text-white text-xs rounded-md px-2 py-1 flex items-center gap-1"><Copy size={12} />{copied ? '복사됨' : '복사'}</button>
+              </div>
+            )}
+          </Card>
+        </div>
+      );
+    };
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    const App = () => {
+      const [email, setEmail] = useState(() => { const s = store.get(); return s ? s.email : null; });
+      const [tab, setTab] = useState('control');
+      const [status, setStatus] = useState('idle');
+      const [log, setLog] = useState([]);
+      const [data, setData] = useState({ market: null, match: null, output: null });
+      useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
+
+      const logout = () => {
+        const s = store.get();
+        if (s) api('/api/auth/logout', { method: 'POST', body: { refreshToken: s.refreshToken } }).catch(() => {});
+        store.set(null); setEmail(null); setTab('control'); setStatus('idle'); setData({ market: null, match: null, output: null });
+      };
+      const loadData = async () => {
+        const [m, x, o] = await Promise.all([
+          api('/api/market').catch(() => null), api('/api/match').catch(() => null), api('/api/outputs').catch(() => null),
+        ]);
+        setData({ market: m && toMarket(m), match: x && toMatchRows(x.rows), output: o && o[0] ? toOutput(o[0]) : null });
+      };
+
+      // 메일 링크(?token=)로 진입한 경우 자동 로그인
+      useEffect(() => {
+        const token = new URLSearchParams(location.search).get('token');
+        if (!token) return;
+        history.replaceState(null, '', location.pathname);
+        fetch('/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
+          .then((r) => r.json()).then((d) => {
+            if (!d.success) return alert(d.message);
+            store.set({ ...d.data, email: d.data.user.email }); setEmail(d.data.user.email);
+          });
+      }, []);
+      useEffect(() => { window.addEventListener('hs-logout', logout); return () => window.removeEventListener('hs-logout', logout); }, []);
+
+      // 로그인 후: 기존 결과 불러오기 + 웹소켓으로 작업 상태 푸시 수신
+      useEffect(() => {
+        if (!email) return;
+        let ws, retry, closed = false;
+        loadData();
+        const connect = async () => {
+          await api('/api/jobs').catch(() => {}); // 만료된 액세스 토큰이면 여기서 갱신
+          const s = store.get();
+          if (closed || !s) return;
+          ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?token=${s.accessToken}`);
+          ws.onmessage = (ev) => {
+            const m = JSON.parse(ev.data);
+            if (m.type === 'job.status') setStatus(SERVER_STATUS[m.status] || 'idle');
+            if (m.type === 'job.done') { setStatus('done'); loadData(); }
+            if (m.type === 'job.failed') { setStatus('idle'); alert(m.message); }
+          };
+          ws.onclose = () => { if (!closed) retry = setTimeout(connect, 3000); };
+        };
+        connect();
+        return () => { closed = true; clearTimeout(retry); ws && ws.close(); };
+      }, [email]);
+
+      return (
+        <div className="mx-auto w-full max-w-[430px] min-h-screen bg-slate-50 shadow-xl relative">
+          {!email ? <AuthScreen onAuthed={setEmail} /> : (
+            <div className="flex flex-col min-h-screen">
+              <Header email={email} status={status} onLogout={logout} />
+              <main className="flex-1 p-4 pb-6 fade-up" key={tab}>
+                {tab === 'control' && <ControlTab status={status} setStatus={setStatus} log={log} setLog={setLog} onJob={() => {}} />}
+                {tab === 'market' && <MarketTab market={data.market} />}
+                {tab === 'match' && <MatchTab match={data.match} />}
+                {tab === 'output' && <OutputTab output={data.output} />}
+              </main>
+              <BottomNav tab={tab} onChange={setTab} />
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
