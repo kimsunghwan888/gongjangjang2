@@ -1,0 +1,8 @@
+users.db
+.jwt_secret
+server.log
+server.err
+trader_state.json
+trades.jsonl
+agent_state.json
+__pycache__/

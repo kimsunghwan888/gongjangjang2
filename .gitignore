@@ -24,6 +24,9 @@ ehthumbs.db
 *.webm
 *.m4a
 
+# 리서치 자동화의 로컬 결과·예약 상태
+week-5/quest5/data/
+
 # 개발 도구가 만드는 폴더
 node_modules/
 __pycache__/

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>여성 다이어트 리서치</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: light; font-family: 'Manrope', 'Noto Sans KR', sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f4f6f1; color: #17251e; }
+    button { font: inherit; }
+    .mono { font-family: 'DM Mono', monospace; }
+    .grain { background-image: radial-gradient(#7b907d22 .65px, transparent .65px); background-size: 7px 7px; }
+    .fade-up { animation: fade-up .55s ease-out both; }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // 1. React Hooks Destructuring
+    // ========================================
+    const { useEffect, useState } = React;
+
+    // ========================================
+    // 2. Design System Components
+    // ========================================
+    function Button({ children, variant = 'dark', className = '', ...props }) {
+      const styles = {
+        dark: 'bg-[#183b2c] text-white hover:bg-[#24533d]',
+        light: 'bg-white text-[#183b2c] ring-1 ring-[#dce4da] hover:bg-[#f7faf5]',
+        quiet: 'text-[#53665a] hover:bg-[#e8eee6]'
+      };
+      return <button className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[#76a680] focus:ring-offset-2 ${styles[variant]} ${className}`} {...props}>{children}</button>;
+    }
+
+    function StatusDot({ tone = 'muted' }) {
+      const tones = { muted: 'bg-[#aeb9ae]', green: 'bg-[#468b5d]', amber: 'bg-[#d39a3c]' };
+      return <span aria-hidden="true" className={`inline-block h-2 w-2 rounded-full ${tones[tone]}`} />;
+    }
+
+    function SectionLabel({ children }) {
+      return <p className="mono text-[10px] font-medium uppercase tracking-[0.12em] text-[#77877a]">{children}</p>;
+    }
+
+    // ========================================
+    // 3. Common / Layout Components
+    // ========================================
+    function Sidebar({ serverOnline, keyConfigured }) {
+      const statusText = !serverOnline ? '서버 연결 안 됨' : keyConfigured ? '키 등록됨' : 'API 키 설정 필요';
+      const statusTone = !serverOnline ? 'muted' : 'amber';
+      return <aside className="flex w-full shrink-0 flex-col bg-[#183b2c] text-white md:min-h-screen md:w-[238px]">
+        <div className="flex items-center gap-3 px-5 py-5 md:px-6 md:py-7">
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#c6ed74] text-sm font-extrabold text-[#183b2c]">R</div>
+          <div><p className="text-sm font-bold tracking-tight">RESEARCH ROOM</p><p className="mt-0.5 text-[10px] text-[#b1c7b6]">콘텐츠 인사이트</p></div>
+        </div>
+        <nav aria-label="주 메뉴" className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:px-3 md:pt-5">
+          <a href="#overview" aria-current="page" className="flex shrink-0 items-center gap-3 rounded-lg bg-[#2c5740] px-3 py-2.5 text-sm font-semibold text-white">
+            <span className="grid h-5 w-5 place-items-center rounded bg-[#c6ed74] text-[10px] font-bold text-[#183b2c]">01</span>리서치 현황
+          </a>
+          <a href="#results" className="flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#c3d0c6] transition-colors hover:bg-[#234a35] hover:text-white">
+            <span className="grid h-5 w-5 place-items-center rounded border border-[#688171] text-[9px]">02</span>인기 콘텐츠
+          </a>
+          <a href="#popular-keywords" className="flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[#c3d0c6] transition-colors hover:bg-[#234a35] hover:text-white">
+            <span className="grid h-5 w-5 place-items-center rounded border border-[#688171] text-[9px]">03</span>인기 키워드
+          </a>
+        </nav>
+        <div className="mt-auto hidden px-5 pb-6 md:block">
+          <div className="border-t border-[#ffffff20] pt-4">
+            <div className="flex items-center gap-2 text-xs text-[#cad8cc]"><StatusDot tone={statusTone} />{statusText}</div>
+            <p className="mt-2 text-[11px] leading-relaxed text-[#91aa98]">전 세계 공개 Shorts 후보를 검색합니다.</p>
+          </div>
+        </div>
+      </aside>;
+    }
+
+    function Header({ serverOnline, keyConfigured }) {
+      const statusText = !serverOnline ? '서버 실행 필요' : keyConfigured ? '키 등록됨' : 'API 키 필요';
+      return <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e1e7df] px-5 py-3.5 md:px-9">
+        <div className="flex items-center gap-2 text-xs text-[#758478]"><span className="font-semibold text-[#344a3a]">워크스페이스</span><span>/</span><span>여성 다이어트</span></div>
+        <div className="flex items-center gap-3"><span className="hidden text-xs text-[#758478] sm:inline">리서치 상태</span><span className="inline-flex items-center gap-2 rounded-full border border-[#e4d5b6] bg-[#fffaf0] px-3 py-1.5 text-[11px] font-semibold text-[#8c682b]"><StatusDot tone={!serverOnline ? 'muted' : 'amber'} />{statusText}</span></div>
+      </header>;
+    }
+
+    // ========================================
+    // 4. Page Components
+    // ========================================
+    function DashboardPage({ onConnectionChange }) {
+      const [serverOnline, setServerOnline] = useState(false);
+      const [keyConfigured, setKeyConfigured] = useState(false);
+      const [items, setItems] = useState([]);
+      const [popularKeywords, setPopularKeywords] = useState([]);
+      const [schedule, setSchedule] = useState({ enabled: false, intervalDays: 7, nextRunAt: null, lastRunAt: null, lastStatus: 'not-started', lastMessage: '' });
+      const [isLoading, setIsLoading] = useState(true);
+      const [isRunning, setIsRunning] = useState(false);
+      const [notice, setNotice] = useState('');
+      const [error, setError] = useState('');
+
+      async function requestJson(url, options = {}) {
+        const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.success === false) throw new Error(payload.message || '요청을 처리하지 못했습니다.');
+        return payload.data;
+      }
+
+      async function loadDashboard() {
+        setIsLoading(true);
+        try {
+          const health = await requestJson('/api/health');
+          setServerOnline(true);
+          setKeyConfigured(health.providerConfigured);
+          onConnectionChange({ serverOnline: true, keyConfigured: health.providerConfigured });
+          const data = await requestJson('/api/research');
+          setItems(data.items || []);
+          setPopularKeywords(data.popularKeywords || []);
+          setSchedule(data.schedule);
+          setError('');
+        } catch (loadError) {
+          setServerOnline(false);
+          onConnectionChange({ serverOnline: false, keyConfigured: false });
+          setError(loadError.message || '서버에 연결할 수 없습니다.');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+
+      useEffect(() => { loadDashboard(); }, []);
+
+      async function handleStart() {
+        setIsRunning(true);
+        setNotice('');
+        try {
+          const data = await requestJson('/api/research/run', { method: 'POST' });
+          setItems(data.items || []);
+          setPopularKeywords(data.popularKeywords || []);
+          setNotice(data.message || '검색을 마쳤습니다.');
+        } catch (runError) {
+          setNotice(runError.message || '검색을 시작하지 못했습니다.');
+        } finally {
+          await loadDashboard();
+          setIsRunning(false);
+        }
+      }
+
+      async function handleScheduleChange(event) {
+        const enabled = event.target.checked;
+        try {
+          const updated = await requestJson('/api/schedule', { method: 'PATCH', body: JSON.stringify({ enabled }) });
+          setSchedule(updated);
+          setNotice(enabled ? '7일 간격 검색 예약을 켰습니다.' : '정기 검색 예약을 껐습니다.');
+        } catch (scheduleError) {
+          setNotice(scheduleError.message || '예약 설정을 바꾸지 못했습니다.');
+        }
+      }
+
+      function handleDownloadReport() {
+        const report = [
+          '# 여성 다이어트 Shorts 리서치 보고서',
+          '',
+          `- 작성 시각: ${new Date().toLocaleString('ko-KR')}`,
+          '- 검색 범위: 전 세계 공개 YouTube Shorts 후보',
+          '- 검색 조건: 여성 다이어트 관련 검색어, 조회수 50,000,000 이상, 영상 길이 3분 이하',
+          `- 수집 결과: ${items.length}개`,
+          '',
+          '## 조회수가 높은 키워드 TOP 3',
+          ...(popularKeywords.length
+            ? popularKeywords.map((keyword, index) => `${index + 1}. #${keyword.keyword} — ${keyword.videoCount}개 영상, 영상 조회수 합계 ${numberFormat.format(keyword.totalViews)} (영상 태그 ${keyword.taggedVideoCount}개, 제목 키워드 ${keyword.titleVideoCount}개)`)
+            : ['확인 가능한 키워드가 없습니다.']),
+          '',
+          '## 조회수 상위 콘텐츠',
+          ...(items.length ? items.map((item, index) => `${index + 1}. [${item.caption || '제목 정보 없음'}](${item.url})\n   - 키워드${item.keywordSource === 'video-tags' ? ' (영상 태그)' : ' (태그 비공개, 제목 기준)'}: ${(item.keywords || []).map(keyword => `#${keyword}`).join(', ') || '정보 없음'}\n   - 조회수: ${numberFormat.format(item.viewCount)}\n   - 채널: ${item.account || '정보 없음'}\n   - 상위 댓글:\n${(item.comments?.items || []).length ? item.comments.items.map((comment, commentIndex) => `     ${commentIndex + 1}. 👍 ${numberFormat.format(comment.likeCount)} — ${comment.text} (${comment.author})`).join('\n') : `     ${item.comments?.message || '댓글 정보가 없습니다.'}`}\n   - 확인 시각: ${dateFormat(item.checkedAt)}`) : ['기준에 맞는 콘텐츠가 없습니다. API 키와 검색 실행 여부를 확인해 주세요.']),
+          '',
+          '> 키워드별 조회수는 해당 태그가 포함된 영상들의 조회수를 합산한 값이며, 개별 태그가 조회수를 직접 유발했다는 뜻은 아닙니다. Shorts 여부는 영상 길이만으로 확정되지 않습니다.'
+        ].join('\n');
+        const blobUrl = URL.createObjectURL(new Blob([report], { type: 'text/markdown;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `여성다이어트-리서치-${new Date().toISOString().slice(0, 10)}.md`;
+        link.click();
+        URL.revokeObjectURL(blobUrl);
+        setNotice('보고서를 다운로드했습니다.');
+      }
+
+      const numberFormat = new Intl.NumberFormat('ko-KR');
+      const dateFormat = value => value ? new Date(value).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' }) : '없음';
+
+      return <main id="overview" className="mx-auto max-w-[1440px] px-5 py-7 md:px-9 md:py-9">
+        <div className="fade-up flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+          <div>
+            <div className="mb-3 flex items-center gap-2"><span className="h-px w-6 bg-[#82a65b]" /><SectionLabel>WEEKLY SIGNAL SCAN / 001</SectionLabel></div>
+            <h1 className="text-[27px] font-extrabold tracking-tight text-[#183b2c] md:text-[34px]">여성 다이어트 리서치</h1>
+            <p className="mt-2 text-sm text-[#758478]">전 세계 Shorts에서 5천만 조회 이상 콘텐츠, 태그 키워드와 인기 댓글을 모읍니다.</p>
+          </div>
+          <Button onClick={handleStart} disabled={isRunning || !serverOnline} className="w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><span className="text-base leading-none" aria-hidden="true">{isRunning ? '…' : '↗'}</span>{isRunning ? '검색 중' : '리서치 시작'}</Button>
+        </div>
+
+        {error && <div role="alert" className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e7d4c5] bg-[#fff8f2] px-4 py-3 text-xs text-[#765438]"><span>{error} `node server.js` 실행 후 다시 연결해 주세요.</span><Button variant="light" className="px-3 py-2 text-xs" onClick={loadDashboard}>다시 연결</Button></div>}
+
+        <section aria-label="검색 기준" className="fade-up mt-7 grid overflow-hidden rounded-xl border border-[#dfe6dc] bg-white sm:grid-cols-2 lg:grid-cols-4" style={{ animationDelay: '70ms' }}>
+          <div className="border-b border-[#e8ede6] px-5 py-4 sm:border-r lg:border-b-0"><SectionLabel>PLATFORM</SectionLabel><p className="mt-2 flex items-center gap-2 text-sm font-bold"><span className="grid h-6 w-6 place-items-center rounded-md bg-[#edf3e9] text-[8px] font-extrabold text-[#31583b]">YT</span>YouTube Shorts</p></div>
+          <div className="border-b border-[#e8ede6] px-5 py-4 lg:border-r lg:border-b-0"><SectionLabel>TOPIC</SectionLabel><p className="mt-2 text-sm font-bold">여성 다이어트</p></div>
+          <div className="border-b border-[#e8ede6] px-5 py-4 sm:border-r sm:border-b-0"><SectionLabel>MIN. VIEWS</SectionLabel><p className="mono mt-2 text-sm font-medium">50,000,000 <span className="font-sans text-xs font-semibold text-[#758478]">이상</span></p></div>
+          <div className="px-5 py-4"><SectionLabel>RESULTS</SectionLabel><p className="mono mt-2 text-sm font-medium">TOP 10 <span className="font-sans text-xs font-semibold text-[#758478]">콘텐츠</span></p></div>
+        </section>
+
+        <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.75fr)_minmax(280px,0.8fr)]">
+          <section id="results" className="fade-up min-w-0 overflow-hidden rounded-xl border border-[#dfe6dc] bg-white" style={{ animationDelay: '140ms' }}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8ede6] px-5 py-4 md:px-6">
+              <div><SectionLabel>CONTENT WATCHLIST</SectionLabel><h2 className="mt-1.5 text-base font-bold">조회수 상위 콘텐츠</h2></div>
+              <div className="flex items-center gap-2"><span className="rounded-md bg-[#f1f4ef] px-2.5 py-1.5 text-[11px] font-semibold text-[#647366]">기준: 5천만 이상</span><Button variant="light" onClick={handleDownloadReport} className="px-3 py-2 text-xs">보고서 다운로드</Button></div>
+            </div>
+            <div id="popular-keywords" className="border-b border-[#e8ede6] bg-[#f8faf6] px-5 py-4 md:px-6">
+              <SectionLabel>TOP KEYWORDS BY VIDEO VIEWS</SectionLabel>
+              <h3 className="mt-1 text-sm font-bold">조회수가 높은 키워드 TOP 3</h3>
+              <p className="mt-1 text-[11px] text-[#78867a]">공개 태그 우선, 태그가 없으면 제목 키워드로 집계합니다. 합계는 키워드가 포함된 영상들의 조회수입니다.</p>
+              {popularKeywords.length > 0
+                ? <ol className="mt-3 grid gap-2 sm:grid-cols-3">{popularKeywords.map((keyword, index) => <li key={keyword.keyword} className="rounded-lg border border-[#e1e8de] bg-white px-3 py-2"><span className="mono mr-1 text-[10px] text-[#78867a]">{index + 1}위</span><strong className="text-xs text-[#3b6042]">#{keyword.keyword}</strong><p className="mt-1 text-[10px] text-[#78867a]">{keyword.videoCount}개 영상 · {numberFormat.format(keyword.totalViews)}회 합계</p><p className="mt-0.5 text-[10px] text-[#879287]">태그 {keyword.taggedVideoCount} · 제목 {keyword.titleVideoCount}</p></li>)}</ol>
+                : <p className="mt-3 text-xs text-[#78867a]">확인 가능한 키워드가 없습니다. 리서치를 다시 실행해 주세요.</p>}
+            </div>
+            {isLoading && <div className="flex min-h-[180px] items-center justify-center text-sm text-[#78867a]" role="status">서버에서 리서치 현황을 불러오는 중입니다.</div>}
+            {!isLoading && items.length === 0 && <div className="grain flex min-h-[230px] flex-col items-center justify-center px-6 py-8 text-center">
+              <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-[#dce5d8] bg-white text-[#527855] shadow-sm"><span className="text-xl" aria-hidden="true">◎</span></div>
+              <h3 className="text-sm font-bold text-[#304737]">{schedule.lastRunAt ? '기준에 맞는 콘텐츠가 없습니다' : '아직 검색하지 않았습니다'}</h3>
+              <p className="mt-2 max-w-sm text-xs leading-5 text-[#78867a]">{schedule.lastMessage || '검색을 시작하면 YouTube에서 공개 데이터를 확인합니다.'}<br className="hidden sm:block" />3분 이하 영상만 Shorts 후보로 표시합니다.</p>
+              <div className="mt-5 flex items-center gap-2 rounded-lg border border-[#e1e8de] bg-white/90 px-3 py-2 text-[11px] text-[#738174]"><StatusDot tone={schedule.lastStatus === 'completed' ? 'green' : 'muted'} />최근 실행 {dateFormat(schedule.lastRunAt)}</div>
+            </div>}
+            {!isLoading && items.length > 0 && <ol className="divide-y divide-[#edf0eb]">{items.map((item, index) => <li key={item.id} className="min-w-0 px-5 py-4 md:px-6">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mono mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#edf3e9] text-xs font-medium text-[#436444]">{String(index + 1).padStart(2, '0')}</span>
+                <div className="min-w-0 flex-1">
+                  <a href={item.url} target="_blank" rel="noreferrer" className="block text-sm font-semibold text-[#304737] hover:underline">{item.caption || '제목 정보 없음'}</a>
+                  <p className="mt-1 text-xs text-[#7a877c]">{item.account || '채널 정보 없음'} · {Math.floor(item.durationSeconds / 60)}분 {item.durationSeconds % 60}초 · {dateFormat(item.checkedAt)}</p>
+                  <p className="mt-2 text-[10px] font-semibold text-[#78867a]">{item.keywordSource === 'video-tags' ? '영상 태그' : '태그 비공개 · 제목에서 찾은 키워드'}</p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">{(item.keywords || []).slice(0, 3).map((keyword, keywordIndex) => <span key={`${keyword}-${keywordIndex}`} className="rounded-full bg-[#edf5e8] px-2 py-1 text-[10px] font-semibold text-[#4d704e]">{keywordIndex + 1}. #{keyword}</span>)}{!item.keywords?.length && <span className="text-[10px] text-[#879287]">확인 가능한 키워드가 없습니다.</span>}</div>
+                </div>
+                <span className="mono shrink-0 text-xs font-medium text-[#436444]">{numberFormat.format(item.viewCount)}</span>
+              </div>
+              <div className="ml-10 mt-3 rounded-lg bg-[#f8faf6] px-3 py-3">
+                <h3 className="text-[11px] font-bold text-[#415244]">좋아요가 많은 댓글 TOP 5</h3>
+                {item.comments?.items?.length
+                  ? <ol className="mt-2 space-y-2">{item.comments.items.slice(0, 5).map((comment, commentIndex) => <li key={`${commentIndex}-${comment.author}`} className="flex gap-2 text-[11px] leading-5 text-[#53665a]"><span className="mono shrink-0 text-[#829082]">{commentIndex + 1}.</span><div className="min-w-0"><p className="line-clamp-3 break-words">{comment.text}</p><p className="mt-0.5 text-[10px] text-[#879287]">{comment.author} · 좋아요 {numberFormat.format(comment.likeCount)}</p></div></li>)}</ol>
+                  : <p className="mt-2 text-[11px] text-[#879287]">{item.comments?.message || '댓글 정보가 없습니다.'}</p>}
+              </div>
+            </li>)}</ol>}
+            <div className="flex items-center justify-between border-t border-[#e8ede6] px-5 py-3 text-[11px] text-[#879287] md:px-6"><span>표시 기준 <strong className="font-semibold text-[#556557]">조회수 50,000,000 이상</strong></span><span className="mono">{items.length} / 10</span></div>
+          </section>
+
+          <div className="flex flex-col gap-5">
+            <section className="fade-up overflow-hidden rounded-xl border border-[#dfe6dc] bg-white" style={{ animationDelay: '210ms' }}>
+              <div className="flex items-center justify-between border-b border-[#e8ede6] px-5 py-4"><div><SectionLabel>SCHEDULE</SectionLabel><h2 className="mt-1.5 text-base font-bold">정기 리서치</h2></div><span className={`rounded-md border px-2 py-1 text-[10px] font-bold ${schedule.enabled ? 'border-[#c9dfcb] bg-[#f1faf0] text-[#47704b]' : 'border-[#e3e5df] bg-[#f4f5f1] text-[#758478]'}`}>{schedule.enabled ? '켜짐' : '꺼짐'}</span></div>
+              <div className="px-5 py-4"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#415244]">실행 간격</span><span className="mono rounded-md bg-[#f1f4ef] px-2.5 py-1.5 text-xs font-medium">7일</span></div><label className="mt-4 flex cursor-pointer items-center justify-between border-t border-[#edf0eb] pt-4"><span className="text-xs font-medium text-[#53665a]">자동 검색 예약</span><input type="checkbox" checked={schedule.enabled} onChange={handleScheduleChange} disabled={!serverOnline} className="h-4 w-4 accent-[#31583b]" aria-label="7일 간격 자동 검색 예약" /></label><p className="mt-3 text-[11px] leading-5 text-[#78867a]">다음 실행: {dateFormat(schedule.nextRunAt)}<br />서버가 켜져 있는 동안에만 실행됩니다.</p></div>
+            </section>
+
+          </div>
+        </div>
+        {notice && <div role="status" className="fixed bottom-5 left-1/2 z-10 -translate-x-1/2 rounded-lg bg-[#183b2c] px-4 py-3 text-xs font-medium text-white shadow-lg">{notice}</div>}
+      </main>;
+    }
+
+    // ========================================
+    // 5. App Component
+    // ========================================
+    function App() {
+      const [connection, setConnection] = useState({ serverOnline: false, keyConfigured: false });
+      return <div className="min-h-screen md:flex"><Sidebar serverOnline={connection.serverOnline} keyConfigured={connection.keyConfigured} /><div className="min-w-0 flex-1"><Header serverOnline={connection.serverOnline} keyConfigured={connection.keyConfigured} /><DashboardPage onConnectionChange={setConnection} /></div></div>;
+    }
+
+    // ========================================
+    // 6. Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

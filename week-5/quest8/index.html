@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YOU · 모의투자 자동 매매 에이전트</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://unpkg.com/react-is@18.3.1/umd/react-is.development.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <script>
+    tailwind.config = { theme: { extend: { fontFamily: { sans: ['Pretendard', 'system-ui', 'sans-serif'] } } } };
+  </script>
+  <style>
+    body { background: #05070f; font-family: 'Pretendard', system-ui, sans-serif; }
+    .mesh { position: fixed; inset: 0; z-index: -1; overflow: hidden;
+      background: radial-gradient(1200px 600px at 10% -10%, rgba(56,189,248,.14), transparent 60%),
+                  radial-gradient(900px 600px at 100% 10%, rgba(168,85,247,.16), transparent 60%),
+                  radial-gradient(800px 500px at 50% 120%, rgba(16,185,129,.10), transparent 60%), #05070f; }
+    .glass { background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.09); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+    .grad-text { background: linear-gradient(90deg, #38bdf8, #a78bfa 55%, #f472b6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .btn-grad { background: linear-gradient(90deg, #0ea5e9, #8b5cf6); }
+    .btn-grad:hover:not(:disabled) { filter: brightness(1.12); box-shadow: 0 0 28px rgba(139,92,246,.45); }
+    .gauge-arc { transition: stroke-dashoffset .9s ease, stroke .4s; }
+    @keyframes pulse-dot { 0%,100% { opacity: 1; transform: scale(1) } 50% { opacity: .4; transform: scale(.8) } }
+    .pulse-dot { animation: pulse-dot 1.6s infinite; }
+    @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+    .float { animation: float 6s ease-in-out infinite; }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+    .fade-up { animation: fade-up .35s ease both; }
+    @keyframes blink { 0%,80%,100% { opacity: .2 } 40% { opacity: 1 } }
+    .dot-typing span { animation: blink 1.2s infinite; } .dot-typing span:nth-child(2) { animation-delay: .2s } .dot-typing span:nth-child(3) { animation-delay: .4s }
+    @keyframes orb { 0%,100% { box-shadow: 0 0 0 0 rgba(139,92,246,.5) } 50% { box-shadow: 0 0 0 10px rgba(139,92,246,0) } }
+    .orb { animation: orb 2.4s infinite; }
+    ::-webkit-scrollbar { width: 8px; height: 8px } ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 8px }
+  </style>
+</head>
+<body class="text-slate-100 antialiased">
+  <div class="mesh"></div>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks & Recharts
+    // ========================================
+    const { useState, useEffect, useMemo, useRef, useCallback } = React;
+    const { ComposedChart, Bar, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceDot } = Recharts;
+
+    // ========================================
+    // 🔐 API & Auth Helpers (JWT)
+    // ========================================
+    const TOKEN_KEY = 'you_jwt';
+    const getToken = () => localStorage.getItem(TOKEN_KEY);
+    const setToken = (t) => t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
+
+    class ApiError extends Error { constructor(msg, status) { super(msg); this.status = status; } }
+
+    async function api(path, { method = 'GET', body } = {}) {
+      let res;
+      try {
+        res = await fetch(path, {
+          method,
+          headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      } catch (e) {
+        throw new ApiError('서버에 연결할 수 없습니다. 엔진이 실행 중인지 확인해 주세요.', 0);
+      }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.success === false) throw new ApiError(json.message || json.detail || '요청에 실패했습니다', res.status);
+      return json.data;
+    }
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    function Card({ children, className = '' }) {
+      return <div className={`glass rounded-2xl shadow-xl shadow-black/30 p-5 ${className}`}>{children}</div>;
+    }
+
+    function Badge({ children, tone = 'slate', className = '' }) {
+      const tones = {
+        slate: 'bg-white/10 text-slate-200', green: 'bg-emerald-400/15 text-emerald-300', red: 'bg-rose-400/15 text-rose-300',
+        blue: 'bg-sky-400/15 text-sky-300', amber: 'bg-amber-400/15 text-amber-300', violet: 'bg-violet-400/15 text-violet-300',
+      };
+      return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${tones[tone]} ${className}`}>{children}</span>;
+    }
+
+    function Button({ children, variant = 'primary', size = 'md', className = '', ...rest }) {
+      const v = { primary: 'btn-grad text-white font-semibold', ghost: 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10' };
+      const s = { sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-2.5', lg: 'px-5 py-3 text-lg' };
+      return <button className={`rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed ${v[variant]} ${s[size]} ${className}`} {...rest}>{children}</button>;
+    }
+
+    function Input({ label, error, className = '', ...rest }) {
+      return (
+        <label className={`block ${className}`}>
+          <span className="text-xs text-slate-400">{label}</span>
+          <input className={`mt-1 w-full rounded-xl bg-white/5 border px-4 py-3 outline-none transition placeholder:text-slate-600 focus:bg-white/10 ${error ? 'border-rose-400/70' : 'border-white/10 focus:border-violet-400/70'}`} {...rest} />
+          {error && <span className="text-xs text-rose-300 mt-1 block">{error}</span>}
+        </label>
+      );
+    }
+
+    function Switch({ checked, onChange, label, disabled }) {
+      return (
+        <button role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
+          className={`relative w-14 h-7 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${checked ? 'bg-emerald-500 shadow-[0_0_18px_rgba(16,185,129,.55)]' : 'bg-slate-600'}`}>
+          <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full transition-transform ${checked ? 'translate-x-7' : ''}`} />
+        </button>
+      );
+    }
+
+    function Gauge({ value, label }) {
+      const r = 80, circ = Math.PI * r;
+      const color = value >= 75 ? '#34d399' : value >= 50 ? '#fbbf24' : '#fb7185';
+      return (
+        <svg viewBox="0 0 200 120" className="w-full max-w-xs mx-auto" role="img" aria-label={`${label} ${value}점`}>
+          <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="16" strokeLinecap="round" />
+          <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke={color} strokeWidth="16" strokeLinecap="round"
+            strokeDasharray={circ} strokeDashoffset={circ * (1 - Math.min(value, 100) / 100)} className="gauge-arc" style={{ filter: `drop-shadow(0 0 8px ${color}88)` }} />
+          <text x="100" y="92" textAnchor="middle" fontSize="38" fontWeight="700" fill="#f1f5f9">{Math.round(value)}</text>
+          <text x="100" y="112" textAnchor="middle" fontSize="11" fill="#94a3b8">/ 100</text>
+        </svg>
+      );
+    }
+
+    // ========================================
+    // 🔑 Auth Screen (로그인 / 회원가입)
+    // ========================================
+    function AuthScreen({ onAuthed }) {
+      const [mode, setMode] = useState('login');
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [confirm, setConfirm] = useState('');
+      const [busy, setBusy] = useState(false);
+      const [error, setError] = useState('');
+      const reg = mode === 'register';
+
+      const fieldErr = {
+        username: reg && username && !/^([A-Za-z0-9_가-힣]{3,20}|[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,})$/.test(username.trim()) ? '이메일 또는 3~20자의 한글/영문/숫자/_ 만 가능해요' : '',
+        password: reg && password && password.length < 8 ? '8자 이상 입력해 주세요' : '',
+        confirm: reg && confirm && confirm !== password ? '비밀번호가 일치하지 않아요' : '',
+      };
+      const valid = username && password && (!reg || (!fieldErr.username && !fieldErr.password && confirm === password));
+
+      const submit = async (e) => {
+        e.preventDefault();
+        if (!valid || busy) return;
+        setBusy(true); setError('');
+        try {
+          const d = await api(`/api/auth/${reg ? 'register' : 'login'}`, { method: 'POST', body: { username, password } });
+          setToken(d.token);
+          onAuthed(d.username);
+        } catch (err) {
+          if (err.status === 404) { setMode('register'); setConfirm(''); setError('가입되지 않은 아이디예요. 아래에 비밀번호 확인을 입력하고 바로 가입해 주세요.'); }
+          else setError(err.message);
+        }
+        finally { setBusy(false); }
+      };
+
+      return (
+        <div className="min-h-screen grid lg:grid-cols-2">
+          <div className="hidden lg:flex flex-col justify-center px-16 relative">
+            <div className="float w-24 h-24 rounded-3xl btn-grad flex items-center justify-center text-5xl font-black shadow-2xl shadow-violet-500/40 mb-8">Y</div>
+            <h1 className="text-6xl font-black leading-tight">나만의<br /><span className="grad-text">AI 트레이딩 파트너,<br />YOU</span></h1>
+            <p className="text-slate-400 mt-6 text-lg max-w-md">실제 시세로 움직이는 가상 자금 1,000만원. 세력 매집을 읽고, 바닥을 찾고, 대화하며 매매합니다.</p>
+            <div className="flex gap-3 mt-8 flex-wrap">
+              {['실시간 시세', '매집 세력 진단', '자동 모의 매매'].map(t => <Badge key={t} tone="violet" className="!text-sm !px-3 !py-1">{t}</Badge>)}
+            </div>
+          </div>
+          <div className="flex items-center justify-center p-6">
+            <Card className="w-full max-w-md !p-8 fade-up">
+              <div className="lg:hidden text-center mb-6"><span className="text-3xl font-black grad-text">YOU</span></div>
+              <div className="flex gap-1 bg-white/5 rounded-xl p-1 mb-6" role="tablist">
+                {[['login', '로그인'], ['register', '회원가입']].map(([k, l]) => (
+                  <button key={k} role="tab" aria-selected={mode === k} onClick={() => { setMode(k); setError(''); }}
+                    className={`flex-1 py-2 rounded-lg text-sm transition ${mode === k ? 'btn-grad text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>{l}</button>
+                ))}
+              </div>
+              <h2 className="text-2xl font-bold">{reg ? '처음 오셨군요 👋' : '다시 만나서 반가워요'}</h2>
+              <p className="text-slate-400 text-sm mt-1 mb-6">{reg ? '아이디와 비밀번호만 있으면 바로 시작해요.' : '로그인하고 YOU와 이야기해 보세요.'}</p>
+              <form onSubmit={submit} className="space-y-4">
+                <Input label="아이디" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" placeholder="이메일 또는 영문/숫자/한글 3자 이상" error={fieldErr.username} />
+                <Input label="비밀번호" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={reg ? 'new-password' : 'current-password'} placeholder="8자 이상" error={fieldErr.password} />
+                {reg && <Input label="비밀번호 확인" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} autoComplete="new-password" error={fieldErr.confirm} />}
+                {error && <div role="alert" className="text-sm text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-xl px-3 py-2">{error}</div>}
+                {!valid && !busy && <p className="text-xs text-slate-500 -mb-2">{!username ? '아이디를 입력해 주세요.' : !password ? '비밀번호를 입력해 주세요.' : reg && fieldErr.username ? fieldErr.username : reg && fieldErr.password ? fieldErr.password : reg && confirm !== password ? '비밀번호 확인란에 같은 비밀번호를 한 번 더 입력해 주세요.' : ''}</p>}
+                <Button type="submit" size="lg" className="w-full" disabled={!valid || busy}>{busy ? '잠시만요…' : reg ? '가입하고 시작하기' : '로그인'}</Button>
+              </form>
+              <p className="text-[11px] text-slate-600 mt-5 text-center">모의투자 전용 · 가상 자금으로만 거래됩니다</p>
+            </Card>
+          </div>
+        </div>
+      );
+    }
+
+    // ========================================
+    // 💬 YOU Assistant (대화형 어시스턴트)
+    // ========================================
+    function RichText({ text }) {
+      return <>{text.split('\n').map((line, i) => (
+        <div key={i}>{line.split(/(\*\*[^*]+\*\*)/g).map((p, j) => p.startsWith('**') ? <b key={j} className="text-white">{p.slice(2, -2)}</b> : p)}</div>
+      ))}</>;
+    }
+
+    function Assistant({ open, setOpen, onRefresh }) {
+      const [msgs, setMsgs] = useState([]);
+      const [chips, setChips] = useState([]);
+      const [typing, setTyping] = useState(false);
+      const [text, setText] = useState('');
+      const endRef = useRef(null);
+      const started = useRef(false);
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+      const say = async (lines) => {
+        for (const l of lines) {
+          setTyping(true); await sleep(550 + Math.min(l.length * 12, 700));
+          setTyping(false); setMsgs(m => [...m, { from: 'you', text: l }]);
+        }
+      };
+
+      useEffect(() => {
+        if (started.current) return;
+        started.current = true;
+        (async () => {
+          try {
+            const d = await api('/api/assistant/briefing');
+            await say(d.messages); setChips(d.suggestions);
+          } catch (e) { await say(['안녕하세요! 저는 YOU예요. 서버와 연결되면 바로 도와드릴게요.']); }
+        })();
+      }, []);
+
+      useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, typing]);
+
+      const send = async (send, label) => {
+        const shown = label || send;
+        if (!shown.trim() || typing) return;
+        setChips([]); setText('');
+        setMsgs(m => [...m, { from: 'me', text: shown }]);
+        try {
+          const d = await api('/api/assistant', { method: 'POST', body: { message: send } });
+          await say([d.reply]); setChips(d.suggestions || []);
+          if (d.refresh) onRefresh();
+        } catch (e) { await say([e.message]); }
+      };
+
+      return (
+        <>
+          <button onClick={() => setOpen(!open)} aria-label="YOU 대화 열기/닫기"
+            className="fixed bottom-5 right-5 z-30 w-14 h-14 rounded-full btn-grad orb flex items-center justify-center text-2xl font-black shadow-xl">
+            {open ? '✕' : 'Y'}
+          </button>
+          {open && (
+            <div className="fixed z-20 bottom-24 right-5 w-[calc(100vw-2.5rem)] sm:w-96 h-[34rem] max-h-[75vh] glass rounded-3xl shadow-2xl shadow-black/60 flex flex-col fade-up bg-slate-950/70">
+              <div className="px-5 py-4 border-b border-white/10 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full btn-grad flex items-center justify-center font-black">Y</div>
+                <div><div className="font-bold leading-tight">YOU</div><div className="text-[11px] text-emerald-300 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />온라인</div></div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
+                {msgs.map((m, i) => (
+                  <div key={i} className={`flex ${m.from === 'me' ? 'justify-end' : 'justify-start'} fade-up`}>
+                    <div className={`max-w-[85%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${m.from === 'me' ? 'btn-grad text-white rounded-br-md' : 'bg-white/8 bg-white/10 rounded-bl-md'}`}><RichText text={m.text} /></div>
+                  </div>
+                ))}
+                {typing && <div className="flex"><div className="bg-white/10 px-4 py-3 rounded-2xl rounded-bl-md dot-typing text-slate-300 text-lg leading-none"><span>•</span><span>•</span><span>•</span></div></div>}
+                <div ref={endRef} />
+              </div>
+              {chips.length > 0 && (
+                <div className="px-4 pb-2 flex flex-wrap gap-2">
+                  {chips.map((c, i) => <button key={i} onClick={() => send(c.send, c.label)} className="fade-up text-xs px-3 py-1.5 rounded-full border border-violet-400/40 text-violet-200 hover:bg-violet-500/20 transition">{c.label}</button>)}
+                </div>
+              )}
+              <form onSubmit={(e) => { e.preventDefault(); send(text); }} className="p-3 border-t border-white/10 flex gap-2">
+                <input value={text} onChange={e => setText(e.target.value)} placeholder="YOU에게 물어보세요…" maxLength={200}
+                  className="flex-1 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-violet-400/70" />
+                <Button type="submit" size="sm" disabled={!text.trim() || typing}>보내기</Button>
+              </form>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    // ========================================
+    // 🧩 Layout: Header, Summary, Stock List
+    // ========================================
+    const fmtKRW = (v) => v == null ? '-' : '₩' + Math.round(v).toLocaleString('ko-KR');
+    const fmtPrice = (s) => s.price == null ? '-' : (s.market === 'US' ? '$' + s.price.toFixed(2) : '₩' + Math.round(s.price).toLocaleString('ko-KR'));
+
+    function SummaryBar({ snap, user, onToggle, onLogout, toggling }) {
+      const a = snap?.account;
+      const on = snap?.agent.on;
+      const ret = a?.return_pct ?? 0;
+      const items = [
+        { label: '총 자산', value: a ? fmtKRW(a.total_krw) : '…', sub: a ? `초기 ${fmtKRW(a.budget_krw)}` : '' },
+        { label: '수익률', value: a ? `${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%` : '…', sub: a ? `실현 ${fmtKRW(a.realized_krw)}` : '', tone: ret >= 0 ? 'text-emerald-300' : 'text-rose-300' },
+        { label: '당일 매매 횟수', value: a ? `${a.trades_today}회` : '…', sub: a ? `매수 ${a.buys_today} · 매도 ${a.sells_today}` : '' },
+      ];
+      return (
+        <header className="sticky top-0 z-10 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex items-center justify-between lg:w-56">
+              <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg btn-grad flex items-center justify-center font-black">Y</div><span className="font-black text-xl grad-text">YOU</span></div>
+              <div className="lg:hidden flex items-center gap-2 text-xs text-slate-400">{user}<button onClick={onLogout} className="underline">로그아웃</button></div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 flex-1">
+              {items.map(i => (
+                <div key={i.label}><div className="text-xs text-slate-400">{i.label}</div>
+                  <div className={`text-lg sm:text-2xl font-bold ${i.tone || ''}`}>{i.value}</div>
+                  <div className="text-[11px] text-slate-500 truncate">{i.sub}</div></div>
+              ))}
+            </div>
+            <div className="flex items-center gap-4 justify-between lg:justify-end">
+              <div>
+                <div className="text-xs text-slate-400">에이전트</div>
+                <div className="flex items-center gap-2 font-bold text-sm"><span className={`w-2.5 h-2.5 rounded-full ${on ? 'bg-emerald-400 pulse-dot' : 'bg-slate-500'}`} />{on ? '가동 중 ON' : '정지 OFF'}</div>
+              </div>
+              <Switch checked={!!on} onChange={onToggle} label="에이전트 가동 스위치" disabled={!snap || toggling} />
+              <div className="hidden lg:flex items-center gap-2 pl-4 border-l border-white/10 text-sm"><span className="text-slate-300">{user}</span><Button variant="ghost" size="sm" onClick={onLogout}>로그아웃</Button></div>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    function StockList({ stocks, selectedId, onSelect }) {
+      return (
+        <aside className="lg:w-80 shrink-0">
+          <Card className="!p-3">
+            <h2 className="px-2 pb-2 text-sm font-semibold text-slate-300">관심 종목 <span className="text-slate-500">({stocks.length})</span></h2>
+            <ul className="space-y-1" role="listbox" aria-label="종목 리스트">
+              {stocks.map((s, idx) => {
+                const up = (s.change ?? 0) >= 0, active = s.id === selectedId;
+                return (
+                  <React.Fragment key={s.id}>
+                    {(idx === 0 || idx === 7) && <li className="px-2 pt-3 pb-1 text-[11px] uppercase tracking-wide text-slate-500">{idx === 0 ? '고정 종목 (7)' : '🔬 리서치 추천 (3)'}</li>}
+                    <li>
+                      <button role="option" aria-selected={active} onClick={() => onSelect(s.id)}
+                        className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-xl transition ${active ? 'bg-violet-500/15 ring-1 ring-violet-400/60' : 'hover:bg-white/5'}`}>
+                        <div>
+                          <div className="font-medium text-sm flex items-center gap-1.5">{s.name}{s.holding && <Badge tone="green">보유</Badge>}</div>
+                          <div className="text-xs text-slate-500">{s.ticker}{idx >= 7 && <span className="ml-1 text-amber-300">{s.group.replace(' 추천', '')}</span>}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold">{fmtPrice(s)}</div>
+                          <div className={`text-xs font-medium ${up ? 'text-emerald-400' : 'text-rose-400'}`}>{s.change == null ? '-' : `${up ? '▲' : '▼'} ${Math.abs(s.change).toFixed(2)}%`}</div>
+                        </div>
+                      </button>
+                    </li>
+                  </React.Fragment>
+                );
+              })}
+            </ul>
+          </Card>
+        </aside>
+      );
+    }
+
+    // ========================================
+    // 📈 Stock Chart (API OHLCV + MA + 매매 마커)
+    // ========================================
+    const TFS = { day: { label: '일봉', fmt: d => d.slice(5) }, week: { label: '주봉', fmt: d => d.slice(2, 7) }, month: { label: '월봉', fmt: d => d.slice(0, 7) } };
+
+    function SignalMark({ cx, cy, type, label }) {
+      if (cx == null || cy == null) return null;
+      const buy = type === 'buy';
+      return (
+        <g>
+          <rect x={cx - 26} y={buy ? cy + 6 : cy - 26} width="52" height="20" rx="6" fill={buy ? '#ef4444' : '#3b82f6'} />
+          <text x={cx} y={buy ? cy + 20 : cy - 12} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{label}</text>
+        </g>
+      );
+    }
+
+    function StockChart({ stock }) {
+      const [tf, setTf] = useState('day');
+      const [chart, setChart] = useState(null);
+      const [err, setErr] = useState('');
+
+      useEffect(() => {
+        let alive = true;
+        setChart(null); setErr('');
+        const load = () => api(`/api/chart/${stock.id}?tf=${tf}`).then(d => alive && setChart(d)).catch(e => alive && setErr(e.message));
+        load();
+        const t = setInterval(load, 60000);
+        return () => { alive = false; clearInterval(t); };
+      }, [stock.id, tf]);
+
+      const view = useMemo(() => chart ? chart.candles.map((c, i, a) => ({ ...c, up: i === 0 ? true : c.close >= a[i - 1].close })) : [], [chart]);
+      const marks = useMemo(() => {
+        if (!chart) return [];
+        const dates = new Set(chart.candles.map(c => c.date));
+        const sig = chart.signals.map(s => ({ ...s, label: s.type === 'buy' ? '▲ 매수' : '▼ 매도' }));
+        const fills = chart.fills.filter(f => dates.has(f.date)).map(f => ({ date: f.date, type: f.type, label: f.type === 'buy' ? '▲ 체결' : '▼ 체결' }));
+        return [...sig, ...fills].map(m => ({ ...m, y: view.find(v => v.date === m.date)?.close })).filter(m => m.y != null);
+      }, [chart, view]);
+
+      const prices = view.flatMap(v => [v.close, v.ma20, v.ma60, v.ma120]).filter(v => v != null);
+      const lo = prices.length ? Math.min(...prices) : 0, hi = prices.length ? Math.max(...prices) : 1, pad = (hi - lo) * 0.08;
+      const us = stock.market === 'US';
+      const yFmt = (v) => us ? `$${Math.round(v)}` : Math.round(v).toLocaleString('ko-KR');
+
+      return (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-slate-300">실제 가격 차트 · 이동평균선 · 매매 타점</h3>
+            <div className="flex gap-1 bg-white/5 rounded-lg p-1" role="tablist" aria-label="차트 기간">
+              {Object.entries(TFS).map(([k, t]) => (
+                <button key={k} role="tab" aria-selected={tf === k} onClick={() => setTf(k)}
+                  className={`px-3 py-1 text-sm rounded-md transition ${tf === k ? 'btn-grad text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}>{t.label}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ height: 380 }} className="relative">
+            {!chart && !err && <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-sm"><span className="dot-typing text-2xl mr-2"><span>•</span><span>•</span><span>•</span></span>차트를 불러오는 중</div>}
+            {err && <div className="absolute inset-0 flex items-center justify-center text-rose-300 text-sm">{err}</div>}
+            {chart && (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={view} margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(255,255,255,.06)" strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tickFormatter={TFS[tf].fmt} stroke="#64748b" fontSize={11} minTickGap={28} />
+                  <YAxis domain={[Math.max(0, lo - pad), hi + pad]} tickFormatter={yFmt} stroke="#64748b" fontSize={11} width={66} allowDataOverflow />
+                  <Tooltip contentStyle={{ background: '#0b1020', border: '1px solid #334155', borderRadius: 12, fontSize: 12 }}
+                    formatter={(v, n) => [v == null ? '-' : (us ? `$${v.toFixed(2)}` : `₩${Math.round(v).toLocaleString('ko-KR')}`), n]} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="close" name="종가" isAnimationActive={false}>{view.map((v, i) => <Cell key={i} fill={v.up ? '#ef444499' : '#3b82f699'} />)}</Bar>
+                  <Line type="monotone" dataKey="ma20" name="20선" stroke="#facc15" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="ma60" name="60선" stroke="#34d399" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="ma120" name="120선" stroke="#c084fc" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  {marks.map((m, i) => <ReferenceDot key={i} x={m.date} y={m.y} r={0} ifOverflow="visible" shape={(p) => <SignalMark cx={p.cx} cy={p.cy} type={m.type} label={m.label} />} />)}
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+            <span><span className="text-rose-400 font-semibold">▲ 매수</span> 신고가 돌파</span>
+            <span><span className="text-sky-400 font-semibold">▼ 매도</span> 20선 이탈</span>
+            <span>체결 = 에이전트의 실제 모의 체결</span>
+            <span className="text-slate-500">※ 투자 권유가 아닙니다</span>
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 📄 Diagnostic Panel
+    // ========================================
+    const PATTERNS = ['완바닥', '쌍바닥', '다중바닥'];
+    const PATTERN_DESC = { '완바닥': '하락이 멈추고 완만하게 저점을 다지는 둥근 바닥형.', '쌍바닥': 'W자 형태로 두 번 저점을 확인한 뒤 반등하는 패턴.', '다중바닥': '세 번 이상 저점을 테스트하며 매물을 소화하는 패턴.' };
+
+    function DiagnosticPanel({ stock, agentOn }) {
+      const d = stock.diagnosis;
+      const up = (stock.change ?? 0) >= 0;
+      const ready = d && !d.error;
+      const score = ready ? d.score : 0;
+      const scoreTone = score >= 75 ? 'green' : score >= 50 ? 'amber' : 'red';
+      const bull = ready && d.align === '정배열';
+      const mid = ready && d.align === '혼조';
+      const decision = !agentOn ? { t: '에이전트 정지', tone: 'slate' }
+        : !ready ? { t: '분석 중', tone: 'slate' }
+        : d.buy_signal ? { t: '매수 신호', tone: 'green' } : d.sell_signal ? { t: '매도 신호', tone: 'red' } : { t: '관망', tone: 'amber' };
+
+      return (
+        <section className="flex-1 min-w-0 space-y-4">
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap"><h2 className="text-2xl font-bold">{stock.name}</h2><Badge tone="blue">{stock.market === 'US' ? 'US' : 'KR'}</Badge><Badge>{stock.group}</Badge>{stock.holding && <Badge tone="green">보유 중</Badge>}</div>
+                <div className="text-sm text-slate-400 mt-1">{stock.ticker}</div>
+              </div>
+              <div className="text-right"><div className="text-3xl font-bold">{fmtPrice(stock)}</div>
+                <div className={`font-medium ${up ? 'text-emerald-400' : 'text-rose-400'}`}>{stock.change == null ? '-' : `${up ? '▲' : '▼'} ${Math.abs(stock.change).toFixed(2)}% 전일대비`}</div></div>
+            </div>
+            {ready && (d.buy_signal || d.sell_signal) && <p className="mt-3 text-sm bg-white/5 rounded-xl px-3 py-2">{d.buy_signal ? `🔔 ${d.buy_signal.why}` : `⚠️ ${d.sell_signal.why}`}</p>}
+          </Card>
+
+          <StockChart stock={stock} />
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <Card>
+              <h3 className="text-sm font-semibold text-slate-300 mb-2">매집 세력 점수</h3>
+              <Gauge value={score} label="매집 세력 점수" />
+              <div className="text-center mt-1">{ready ? <Badge tone={scoreTone}>{score >= 75 ? '강한 매집 의심' : score >= 50 ? '중립 · 관찰' : '매집 신호 약함'}</Badge> : <Badge>분석 중…</Badge>}</div>
+              {ready && d.vol_ratio != null && <p className="text-xs text-slate-500 text-center mt-2">최근 거래량 / 평소 = {d.vol_ratio}배</p>}
+            </Card>
+            <Card>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">바닥 패턴 탐지</h3>
+              <div className="space-y-2">
+                {PATTERNS.map(p => { const hit = ready && d.pattern === p;
+                  return <div key={p} className={`flex items-center justify-between px-3 py-2.5 rounded-xl border ${hit ? 'border-emerald-400/60 bg-emerald-400/10' : 'border-white/5 bg-white/5 text-slate-500'}`}><span className="font-medium">{p}</span><span className="text-xs">{hit ? '✅ 탐지됨' : '미탐지'}</span></div>; })}
+              </div>
+              <p className="text-xs text-slate-400 mt-3">{ready ? (PATTERN_DESC[d.pattern] || '뚜렷한 바닥 패턴이 아직 형성되지 않았습니다.') : '진단을 계산하고 있어요…'}</p>
+            </Card>
+            <Card>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">이동평균선 배열</h3>
+              <div className={`rounded-xl p-4 text-center border ${!ready || mid ? 'bg-white/5 border-white/10' : bull ? 'bg-emerald-400/10 border-emerald-400/40' : 'bg-rose-400/10 border-rose-400/40'}`}>
+                <div className="text-4xl">{!ready || mid ? '〰️' : bull ? '📈' : '📉'}</div>
+                <div className={`text-2xl font-bold mt-1 ${!ready || mid ? 'text-slate-300' : bull ? 'text-emerald-300' : 'text-rose-300'}`}>{ready ? d.align : '분석 중'}</div>
+              </div>
+              {ready && d.ma && (
+                <div className="mt-3 space-y-1 text-xs text-slate-400">
+                  {[['20선', d.ma.ma20], ['60선', d.ma.ma60], ['120선', d.ma.ma120]].map(([k, v]) => <div key={k} className="flex justify-between"><span>{k}</span><span className="text-slate-200">{v == null ? '-' : (stock.market === 'US' ? '$' + v.toFixed(2) : '₩' + Math.round(v).toLocaleString('ko-KR'))}</span></div>)}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          <Card className="flex flex-wrap items-center justify-between gap-3">
+            <div><div className="text-xs text-slate-400">에이전트 종합 판단</div><div className="text-sm text-slate-300 mt-0.5">매집 점수 · 바닥 패턴 · 배열 · 매매 규칙을 종합한 결과</div></div>
+            <Badge tone={decision.tone} className="!text-base !px-4 !py-1.5">{decision.t}</Badge>
+          </Card>
+        </section>
+      );
+    }
+
+    function TradeLog({ trades }) {
+      return (
+        <Card className="mt-5">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">📜 매매 로그</h3>
+          {trades.length === 0 ? <p className="text-sm text-slate-500">아직 체결된 거래가 없어요. 에이전트를 켜면 신호가 발생할 때 기록돼요.</p> : (
+            <ul className="divide-y divide-white/5 text-sm">
+              {trades.map((t, i) => (
+                <li key={i} className="py-2 flex items-center gap-3"><Badge tone={t.side === 'buy' ? 'red' : 'blue'}>{t.side === 'buy' ? '매수' : '매도'}</Badge>
+                  <span className="font-medium">{t.sym}</span><span className="text-slate-400">{t.qty}주 @ {Number(t.price).toLocaleString('ko-KR')}</span>
+                  <span className="text-xs text-slate-500 ml-auto">{t.rule} · {t.t.replace('T', ' ').slice(5, 16)}</span></li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 🚀 Dashboard & App
+    // ========================================
+    function Dashboard({ user, onLogout }) {
+      const [snap, setSnap] = useState(null);
+      const [err, setErr] = useState('');
+      const [selectedId, setSelectedId] = useState('samsung');
+      const [chatOpen, setChatOpen] = useState(window.innerWidth >= 1280);
+      const [toggling, setToggling] = useState(false);
+
+      const load = useCallback(async () => {
+        try { setSnap(await api('/api/snapshot')); setErr(''); }
+        catch (e) { if (e.status === 401) onLogout(); else setErr(e.message); }
+      }, [onLogout]);
+
+      useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
+
+      const toggle = async (on) => {
+        setToggling(true);
+        try { await api('/api/agent', { method: 'POST', body: { on } }); await load(); } catch (e) { setErr(e.message); }
+        finally { setToggling(false); }
+      };
+
+      const stock = snap?.stocks.find(s => s.id === selectedId) || snap?.stocks[0];
+
+      return (
+        <div className="min-h-screen">
+          <SummaryBar snap={snap} user={user} onToggle={toggle} onLogout={onLogout} toggling={toggling} />
+          {err && <div role="alert" className="max-w-7xl mx-auto mt-4 mx-4 text-sm text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-xl px-4 py-2">{err}</div>}
+          <main className={`max-w-7xl mx-auto px-4 py-5 ${chatOpen ? 'xl:mx-0 xl:max-w-[calc(100vw-26rem)]' : ''}`}>
+            {!snap ? (
+              <div className="text-center text-slate-400 py-32"><span className="dot-typing text-3xl"><span>•</span><span>•</span><span>•</span></span><div className="mt-2">실시간 시세를 불러오는 중…</div></div>
+            ) : (
+              <>
+                <div className="flex flex-col lg:flex-row gap-5">
+                  <StockList stocks={snap.stocks} selectedId={stock.id} onSelect={setSelectedId} />
+                  <DiagnosticPanel stock={stock} agentOn={snap.agent.on} />
+                </div>
+                <TradeLog trades={snap.trades} />
+              </>
+            )}
+          </main>
+          <footer className="text-center text-xs text-slate-600 pb-8">모의투자 전용 · 가상 자금 · 투자 권유가 아닙니다</footer>
+          <Assistant open={chatOpen} setOpen={setChatOpen} onRefresh={load} />
+        </div>
+      );
+    }
+
+    function App() {
+      const [user, setUser] = useState(null);
+      const [checking, setChecking] = useState(!!getToken());
+
+      useEffect(() => {
+        if (!getToken()) return;
+        api('/api/auth/me').then(d => setUser(d.username)).catch(() => setToken(null)).finally(() => setChecking(false));
+      }, []);
+
+      const logout = useCallback(() => { setToken(null); setUser(null); }, []);
+
+      if (location.protocol === 'file:') return <div className="min-h-screen flex items-center justify-center p-6 text-center"><Card><p className="text-lg">서버를 통해 열어주세요</p><p className="text-slate-400 mt-2">브라우저에서 <b className="text-white">http://localhost:8000</b> 으로 접속하세요.</p></Card></div>;
+      if (checking) return <div className="min-h-screen flex items-center justify-center text-slate-400">확인 중…</div>;
+      return user ? <Dashboard key={user} user={user} onLogout={logout} /> : <AuthScreen onAuthed={setUser} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
