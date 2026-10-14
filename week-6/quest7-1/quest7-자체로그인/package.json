@@ -1,0 +1,17 @@
+{
+  "name": "quest7-shop-toss-payment",
+  "version": "1.0.0",
+  "description": "포트폴리오용 쇼핑몰 (토스페이먼츠 테스트 결제)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3",
+    "express": "4.21.2",
+    "jsonwebtoken": "9.0.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

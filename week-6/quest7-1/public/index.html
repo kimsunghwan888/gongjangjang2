@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>포트폴리오 쇼핑몰 (Supabase)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+  <!-- 📦 Supabase 라이브러리 (버전 고정: 2.45.4) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <!-- 💳 토스페이먼츠 결제창 SDK -->
+  <script src="https://js.tosspayments.com/v2/standard"></script>
+</head>
+<body class="bg-stone-100 text-stone-800 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ========================================
+    // 1. React 훅 가져오기
+    // ========================================
+    const { useState, useEffect, useRef } = React;
+
+    // ========================================
+    // 2. 설정값
+    // ========================================
+    // 백엔드 주소: 같은 서버에서 열리므로 상대 경로를 씁니다.
+    const API_BASE_URL = '/api';
+
+    // 💳 토스페이먼츠 테스트 키 (공개해도 되는 "클라이언트 키")
+    const TOSS_CLIENT_KEY = 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
+    const TOSS_CUSTOMER_KEY = 'ANONYMOUS';
+
+    // ⚠️ 자리표시: Supabase 대시보드 > Project Settings > API 에서 복사해서 바꿔 넣으세요.
+    //    URL 예: https://abcd1234.supabase.co  /  anon key 는 "anon public" 으로 표시된 긴 문자열
+    const SUPABASE_URL = 'https://nqgjimbddcjztynihbfi.supabase.co';
+    // 공개해도 되는 "publishable" 키 (브라우저용). Secret 키는 여기에 넣지 않습니다.
+    const SUPABASE_ANON_KEY = 'sb_publishable_XLvOBR-Wgq0MUQ00WmiKtg_OA_j1KMA';
+
+    // 숫자를 "189,000원" 형태로 보여주는 도우미 함수
+    const formatPrice = (value) => `${Number(value).toLocaleString('ko-KR')}원`;
+
+    // ========================================
+    // 3. Supabase 초기화 (📌 초보자용 설명)
+    // createClient 는 "Supabase와 통화하는 전화기"를 만드는 일입니다.
+    // 한 번만 만들어 두고 어디서든 같은 전화기를 씁니다.
+    // 로그인하면 세션(JWT 토큰)이 브라우저 localStorage 에 자동 저장됩니다.
+    // ========================================
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,     // 새로고침해도 로그인 유지
+        autoRefreshToken: true,   // 토큰이 만료되기 전에 자동으로 새로 받기
+      },
+    });
+
+    // 현재 로그인 토큰(JWT)을 꺼내는 도우미. 로그인 안 했으면 null
+    async function getAccessToken() {
+      const { data } = await supabaseClient.auth.getSession();
+      return data.session ? data.session.access_token : null;
+    }
+
+    // ========================================
+    // 4. 공통 요청 도우미 (🔑 토큰 자동 첨부)
+    // 화면 코드는 apiRequest('/orders', {...}) 만 부르면 됩니다.
+    // 토큰이 있으면 "Authorization: Bearer 토큰" 헤더를 자동으로 붙입니다.
+    // ========================================
+    async function apiRequest(endpoint, { method = 'GET', body } = {}) {
+      const headers = {};
+      const token = await getAccessToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || '요청에 실패했어요.');
+      return data;
+    }
+
+    // ========================================
+    // 5. 공통 훅 (로그인 상태 / 데이터 가져오기 / 주소 읽기)
+    // ========================================
+
+    // 로그인 상태(session)를 화면 전체가 알 수 있게 해 주는 훅
+    function useSession() {
+      const [session, setSession] = useState(null);
+      const [ready, setReady] = useState(false); // 처음 확인이 끝났는지
+
+      useEffect(() => {
+        // 처음 열었을 때 이미 로그인된 상태인지 확인
+        supabaseClient.auth.getSession().then(({ data }) => {
+          setSession(data.session);
+          setReady(true);
+        });
+        // 로그인/로그아웃이 일어나면 자동으로 알려 줌
+        const { data } = supabaseClient.auth.onAuthStateChange((_event, newSession) => {
+          setSession(newSession);
+        });
+        // 화면이 사라질 때 구독을 끊어서 메모리 누수 방지 (정리 작업)
+        return () => data.subscription.unsubscribe();
+      }, []);
+
+      return { session, ready };
+    }
+
+    // 서버에서 데이터를 가져올 때 쓰는 훅: 로딩 / 에러 / 데이터
+    function useFetch(endpoint) {
+      const [data, setData] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        let ignore = false; // 화면을 떠난 뒤 도착한 응답은 무시
+        setLoading(true);
+        apiRequest(endpoint)
+          .then((body) => { if (!ignore) setData(body); })
+          .catch((err) => { if (!ignore) setError(err.message); })
+          .finally(() => { if (!ignore) setLoading(false); });
+        return () => { ignore = true; };
+      }, [endpoint]);
+
+      return { data, loading, error };
+    }
+
+    // 주소창의 #/... 부분을 읽어서 "지금 어느 화면인지" 알려주는 훅
+    function getRoute() {
+      const hash = window.location.hash.replace(/^#/, '') || '/';
+      const [pathPart, queryPart] = hash.split('?');
+      return { path: pathPart, query: new URLSearchParams(queryPart || '') };
+    }
+
+    function useRoute() {
+      const [route, setRoute] = useState(getRoute);
+      useEffect(() => {
+        const onChange = () => setRoute(getRoute());
+        window.addEventListener('hashchange', onChange);
+        return () => window.removeEventListener('hashchange', onChange);
+      }, []);
+      return route;
+    }
+
+    // ========================================
+    // 6. 🎨 디자인 부품 (비즈니스 로직 없이 모양만 담당)
+    // ========================================
+
+    function Button({ children, variant = 'primary', size = 'md', disabled = false, onClick, className = '', type = 'button' }) {
+      const variants = {
+        primary: 'bg-stone-800 text-white hover:bg-stone-600',
+        secondary: 'bg-white text-stone-800 border border-stone-300 hover:bg-stone-50',
+        danger: 'bg-red-600 text-white hover:bg-red-500',
+        ghost: 'bg-transparent text-stone-600 hover:bg-stone-200',
+      };
+      const sizes = {
+        sm: 'px-3 py-1.5 text-sm',
+        md: 'px-5 py-2.5 text-base',
+        lg: 'px-6 py-4 text-lg font-semibold',
+      };
+      return (
+        <button
+          type={type}
+          onClick={onClick}
+          disabled={disabled}
+          className={`rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function Card({ children, className = '' }) {
+      return <div className={`bg-white rounded-2xl shadow-sm p-4 sm:p-6 ${className}`}>{children}</div>;
+    }
+
+    function Badge({ children, color = 'gray' }) {
+      const colors = {
+        gray: 'bg-stone-200 text-stone-700',
+        blue: 'bg-blue-100 text-blue-700',
+        amber: 'bg-amber-100 text-amber-700',
+        green: 'bg-green-100 text-green-700',
+      };
+      return <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${colors[color]}`}>{children}</span>;
+    }
+
+    // 주소 이동용 링크 (해시 주소를 바꿔서 화면 전환)
+    function Link({ to, children, className = '' }) {
+      return <a href={`#${to}`} className={className}>{children}</a>;
+    }
+
+    // ========================================
+    // 7. 🧩 공통 레이아웃 (머리글)
+    // ========================================
+    function Header({ session }) {
+      // 로그아웃: Supabase 세션을 지우고 홈으로 보냅니다.
+      const handleLogout = async () => {
+        await supabaseClient.auth.signOut();
+        window.location.hash = '#/';
+      };
+      return (
+        <header className="bg-white border-b border-stone-200">
+          <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <Link to="/" className="text-lg sm:text-xl font-bold">🛋️ 포트폴리오 쇼핑몰</Link>
+            <nav className="flex gap-4 text-sm sm:text-base items-center">
+              <Link to="/" className="hover:underline">홈</Link>
+              <Link to="/mypage" className="hover:underline">마이페이지</Link>
+              {session ? (
+                <button onClick={handleLogout} className="text-stone-500 hover:underline">로그아웃</button>
+              ) : (
+                <Link to="/login" className="hover:underline">로그인</Link>
+              )}
+            </nav>
+          </div>
+        </header>
+      );
+    }
+
+    // ========================================
+    // 8. 📄 화면(페이지) 컴포넌트
+    // ========================================
+
+    // ----- 8-1. 홈: 상품 목록 -----
+    function HomePage() {
+      const { data: products, loading, error } = useFetch('/products');
+      if (loading) return <p className="text-center py-20 text-stone-500">상품을 불러오는 중이에요...</p>;
+      if (error) return <p className="text-center py-20 text-red-600">{error}</p>;
+
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {products.map((p) => (
+            <Link key={p.id} to={`/product/${p.id}`} className="block">
+              <Card className="p-3 hover:shadow-md transition">
+                <img src={p.image} alt={p.name} className="w-full aspect-square object-cover rounded-xl mb-3" />
+                <p className="font-semibold text-sm sm:text-base">{p.name}</p>
+                <p className="text-stone-500 text-sm">{formatPrice(p.price)}</p>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      );
+    }
+
+    // ----- 8-2. 상품 상세 + [결제하기] -----
+    function ProductDetailPage({ productId, session }) {
+      const { data: product, loading, error } = useFetch(`/products/${productId}`);
+      const [paying, setPaying] = useState(false); // 결제 준비 중인지 (버튼 잠금용)
+
+      // [결제하기 버튼을 눌렀을 때의 흐름]
+      // ① 로그인 확인 → ② 백엔드에 상품ID·금액 전송(검증 + 주문번호 받기) → ③ 토스 결제창 열기
+      const handlePay = async () => {
+        if (!session) {
+          window.location.hash = '#/login'; // 로그인 안 했으면 로그인 화면으로
+          return;
+        }
+        setPaying(true);
+        try {
+          // ① 백엔드에 "이 상품, 이 금액으로 살래요" 전송 (토큰은 apiRequest 가 자동으로 붙임)
+          const order = await apiRequest('/orders', {
+            method: 'POST',
+            body: { productId: product.id, amount: product.price },
+          });
+
+          // ② 백엔드가 검증한 주문 정보로 토스 결제창 열기
+          const tossPayments = TossPayments(TOSS_CLIENT_KEY);
+          const payment = tossPayments.payment({ customerKey: TOSS_CUSTOMER_KEY });
+          await payment.requestPayment({
+            method: 'CARD',
+            amount: { currency: 'KRW', value: order.amount },
+            orderId: order.orderId,
+            orderName: order.orderName,
+            successUrl: `${window.location.origin}/#/payment/success`,
+            failUrl: `${window.location.origin}/#/payment/fail`,
+          });
+        } catch (err) {
+          if (err && err.code === 'USER_CANCEL') return; // 사용자가 창을 닫은 경우는 조용히 넘어감
+          alert(`결제를 시작할 수 없어요.\n${err.message || ''}`);
+        } finally {
+          setPaying(false);
+        }
+      };
+
+      if (loading) return <p className="text-center py-20 text-stone-500">상품 정보를 불러오는 중이에요...</p>;
+      if (error) return <p className="text-center py-20 text-red-600">{error}</p>;
+
+      return (
+        <div>
+          <Link to="/" className="text-sm text-stone-500 hover:underline">← 목록으로</Link>
+          <Card className="mt-4 grid md:grid-cols-2 gap-6">
+            <img src={product.image} alt={product.name} className="w-full aspect-square object-cover rounded-xl" />
+            <div className="flex flex-col gap-4">
+              <h1 className="text-2xl font-bold">{product.name}</h1>
+              <p className="text-3xl font-bold">{formatPrice(product.price)}</p>
+              <p className="text-stone-600 leading-relaxed">{product.description}</p>
+              <div className="mt-auto">
+                <Button size="lg" className="w-full" onClick={handlePay} disabled={paying}>
+                  {paying ? '결제창 여는 중...' : '결제하기'}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    // ----- 8-3. 결제 성공: 서버에 최종 승인 요청 → 마이페이지로 이동 -----
+    function PaymentSuccessPage({ query }) {
+      const [status, setStatus] = useState('loading'); // loading | done | error
+      const [message, setMessage] = useState('');
+      const requested = useRef(false); // 같은 승인 요청이 두 번 가지 않도록 막는 표시
+
+      useEffect(() => {
+        if (requested.current) return;
+        requested.current = true;
+
+        // 주소창의 값(paymentKey 등)은 서버에서 다시 검사하므로 그대로 보냅니다.
+        const body = {
+          paymentKey: query.get('paymentKey'),
+          orderId: query.get('orderId'),
+          amount: Number(query.get('amount')),
+        };
+
+        apiRequest('/payments/confirm', { method: 'POST', body })
+          .then(() => {
+            setStatus('done');
+            setTimeout(() => { window.location.hash = '#/mypage'; }, 2000);
+          })
+          .catch((err) => {
+            setStatus('error');
+            setMessage(err.message);
+          });
+      }, []);
+
+      return (
+        <Card className="max-w-md mx-auto text-center py-12">
+          {status === 'loading' && <p className="text-stone-500">결제를 확인하고 있어요...</p>}
+          {status === 'done' && (
+            <>
+              <p className="text-5xl mb-4">✅</p>
+              <h1 className="text-2xl font-bold mb-2">결제가 완료됐어요!</h1>
+              <p className="text-stone-500 mb-6">잠시 후 마이페이지로 이동합니다.</p>
+              <Link to="/mypage" className="underline">바로 이동하기</Link>
+            </>
+          )}
+          {status === 'error' && (
+            <>
+              <p className="text-5xl mb-4">⚠️</p>
+              <h1 className="text-xl font-bold mb-2">결제 확인에 실패했어요</h1>
+              <p className="text-red-600 mb-6">{message}</p>
+              <Link to="/" className="underline">홈으로 돌아가기</Link>
+            </>
+          )}
+        </Card>
+      );
+    }
+
+    // ----- 8-4. 결제 실패 / 취소 -----
+    function PaymentFailPage({ query }) {
+      return (
+        <Card className="max-w-md mx-auto text-center py-12">
+          <p className="text-5xl mb-4">❌</p>
+          <h1 className="text-xl font-bold mb-2">결제가 취소되었거나 실패했어요</h1>
+          <p className="text-stone-500 mb-6">{query.get('message') || '다시 시도해 주세요.'}</p>
+          <Link to="/" className="underline">홈으로 돌아가기</Link>
+        </Card>
+      );
+    }
+
+    // ----- 8-5. 로그인 / 회원가입 (Supabase Auth) -----
+    function AuthPage() {
+      // 📌 useState: 화면이 기억해야 할 값들
+      const [mode, setMode] = useState('login'); // 'login' 또는 'signup'
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [message, setMessage] = useState('');
+      const [notice, setNotice] = useState('');     // 파란색 안내 문구 (예: 확인 메일 보냄)
+      const [submitting, setSubmitting] = useState(false);
+      const isSignup = mode === 'signup';
+
+      // Supabase 영문 에러를 초보자가 알기 쉬운 말로 바꿔 줍니다.
+      const toKoreanMessage = (err) => {
+        if (err.message.includes('Invalid login')) return '이메일 또는 비밀번호가 맞지 않아요.';
+        if (err.message.includes('already registered')) return '이미 가입된 이메일이에요.';
+        if (err.message.includes('Password should be')) return '비밀번호는 6자 이상이어야 해요.';
+        return err.message;
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault(); // 새로고침 막기
+        setSubmitting(true);
+        setMessage('');
+        setNotice('');
+        try {
+          if (isSignup) {
+            // 📝 회원가입: Supabase가 계정을 만듭니다.
+            const { data, error } = await supabaseClient.auth.signUp({ email, password });
+            if (error) throw error;
+            if (data.session) {
+              window.location.hash = '#/mypage'; // 바로 로그인된 경우
+            } else {
+              // 이메일 확인 기능이 켜져 있으면 세션이 바로 안 생깁니다.
+              setNotice('가입 확인 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.');
+            }
+          } else {
+            // 🔐 로그인: 성공하면 Supabase가 세션(JWT)을 브라우저에 저장합니다.
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            window.location.hash = '#/mypage';
+          }
+        } catch (err) {
+          setMessage(toKoreanMessage(err));
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      return (
+        <Card className="max-w-sm mx-auto">
+          <div className="flex gap-2 mb-6">
+            <Button variant={isSignup ? 'secondary' : 'primary'} className="flex-1" onClick={() => { setMode('login'); setMessage(''); setNotice(''); }}>
+              로그인
+            </Button>
+            <Button variant={isSignup ? 'primary' : 'secondary'} className="flex-1" onClick={() => { setMode('signup'); setMessage(''); setNotice(''); }}>
+              회원가입
+            </Button>
+          </div>
+
+          <h1 className="text-xl font-bold mb-1">{isSignup ? '회원가입' : '로그인'}</h1>
+          <p className="text-sm text-stone-500 mb-6">
+            {isSignup ? '이메일과 비밀번호(6자 이상)만 입력하면 끝이에요.' : '가입한 이메일과 비밀번호를 입력해 주세요.'}
+          </p>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="이메일"
+              autoComplete="email"
+              required
+              className="border border-stone-300 rounded-lg px-3 py-2"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="비밀번호"
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              required
+              minLength={isSignup ? 6 : undefined}
+              className="border border-stone-300 rounded-lg px-3 py-2"
+            />
+            {message && <p className="text-red-600 text-sm">{message}</p>}
+            {notice && <p className="text-blue-700 text-sm">{notice}</p>}
+            <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+              {submitting ? '처리 중...' : isSignup ? '가입하고 시작하기' : '로그인'}
+            </Button>
+          </form>
+        </Card>
+      );
+    }
+
+    // ----- 8-6. 마이페이지: 내 주문 내역 -----
+    function OrderItem({ order }) {
+      const statusColor = { 결제대기: 'gray', 결제완료: 'blue', 배송준비중: 'amber' }[order.status] || 'green';
+      return (
+        <Card className="flex items-center gap-4 p-3 sm:p-4">
+          <img src={order.image} alt={order.productName} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold truncate">{order.productName}</p>
+            <p className="text-sm text-stone-500 mt-1">{formatPrice(order.amount)}</p>
+            <p className="text-xs text-stone-400 mt-1 truncate">주문번호 {order.orderId}</p>
+          </div>
+          <Badge color={statusColor}>{order.status}</Badge>
+        </Card>
+      );
+    }
+
+    // 로그인한 사람에게만 보여주는 주문 목록 (요청에 Bearer 토큰이 자동으로 실립니다)
+    function MyOrders() {
+      const { data: orders, loading, error } = useFetch('/orders');
+      return (
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-2xl font-bold mb-4">내 주문 내역</h1>
+          {loading && <p className="text-stone-500 py-10 text-center">주문 내역을 불러오는 중이에요...</p>}
+          {error && <p className="text-red-600 py-10 text-center">{error}</p>}
+          {!loading && !error && orders.length === 0 && (
+            <Card className="text-center py-12">
+              <p className="text-stone-500 mb-4">아직 주문한 상품이 없어요.</p>
+              <Link to="/" className="underline">쇼핑하러 가기</Link>
+            </Card>
+          )}
+          <div className="flex flex-col gap-3">
+            {!loading && !error && orders.map((order) => <OrderItem key={order.orderId} order={order} />)}
+          </div>
+        </div>
+      );
+    }
+
+    function MyPage({ session }) {
+      // 로그인하지 않은 사람은 주문 목록을 요청하지 않고 안내만 합니다.
+      if (!session) {
+        return (
+          <Card className="text-center py-12">
+            <p className="text-stone-500 mb-4">마이페이지는 로그인 후 볼 수 있어요.</p>
+            <Link to="/login" className="underline">로그인하러 가기</Link>
+          </Card>
+        );
+      }
+      return <MyOrders />;
+    }
+
+    function NotFoundPage() {
+      return (
+        <Card className="text-center py-12">
+          <p className="text-stone-500 mb-4">페이지를 찾을 수 없어요.</p>
+          <Link to="/" className="underline">홈으로 돌아가기</Link>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 9. 🚀 App: 로그인 상태와 주소를 보고 화면을 고름
+    // ========================================
+    function App() {
+      const { session, ready } = useSession();
+      const route = useRoute();
+      const { path, query } = route;
+      const productMatch = path.match(/^\/product\/(\d+)$/);
+
+      // 로그인 상태를 처음 확인하는 동안 깜빡임을 막기 위해 잠깐 기다립니다.
+      if (!ready) return <p className="text-center py-20 text-stone-500">불러오는 중이에요...</p>;
+
+      let page;
+      if (path === '/') page = <HomePage />;
+      else if (productMatch) page = <ProductDetailPage key={path} productId={Number(productMatch[1])} session={session} />;
+      else if (path === '/payment/success') page = <PaymentSuccessPage query={query} />;
+      else if (path === '/payment/fail') page = <PaymentFailPage query={query} />;
+      else if (path === '/mypage') page = <MyPage session={session} />;
+      else if (path === '/login') page = <AuthPage />;
+      else page = <NotFoundPage />;
+
+      return (
+        <>
+          <Header session={session} />
+          <main className="max-w-5xl mx-auto px-4 py-6">{page}</main>
+        </>
+      );
+    }
+
+    // ========================================
+    // 10. 화면에 그리기
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "quest7-1-supabase-shop",
+  "version": "1.0.0",
+  "description": "Supabase DB·로그인 연동 쇼핑몰 (토스페이먼츠 테스트 결제)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "dotenv": "16.4.5",
+    "express": "4.21.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
