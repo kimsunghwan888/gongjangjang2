@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>부동산 세금 릴스</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --accent:#f59e0b; --text:#f8fafc; --sub:#cbd5e1; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#0f172a; } }
+  :root[data-theme="dark"] { --bg:#0f172a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#020617; color:var(--text); font-family:"Malgun Gothic", sans-serif;
+         display:flex; flex-direction:column; align-items:center; min-height:100vh; padding:16px; }
+  .reel { position:relative; width:100%; max-width:360px; aspect-ratio:9/16; background:var(--bg);
+          border-radius:20px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+  .scene { position:absolute; inset:0; padding:28px 22px; display:flex; flex-direction:column;
+           justify-content:center; opacity:0; transition:opacity .4s; }
+  .scene.on { opacity:1; }
+  .tag { font-size:13px; color:var(--accent); font-weight:700; letter-spacing:.5px; }
+  h1 { font-size:30px; line-height:1.3; margin:10px 0; }
+  .big { font-size:54px; font-weight:900; color:var(--accent); margin:6px 0; }
+  p { font-size:18px; line-height:1.5; color:var(--sub); margin:6px 0; }
+  .card { background:var(--card); border-radius:14px; padding:14px; margin-top:14px; }
+  .bars { display:flex; align-items:flex-end; gap:10px; height:150px; margin-top:12px; }
+  .bar { flex:1; background:var(--accent); border-radius:6px 6px 0 0; color:#0f172a;
+         font-weight:700; font-size:13px; text-align:center; padding-top:4px; }
+  .bar span { display:block; margin-top:-22px; color:var(--text); }
+  .labels { display:flex; gap:10px; font-size:12px; color:var(--sub); text-align:center; }
+  .labels div { flex:1; }
+  .caption { position:absolute; left:14px; right:14px; bottom:44px; background:rgba(0,0,0,.65);
+             color:#fff; border-radius:10px; padding:10px; text-align:center; font-size:17px;
+             font-weight:700; min-height:50px; }
+  .bottom { position:absolute; left:0; right:0; bottom:0; height:6px; background:#334155; }
+  .bottom i { display:block; height:100%; width:0; background:var(--accent); }
+  .controls { margin-top:14px; display:flex; gap:10px; }
+  button { font-size:17px; padding:12px 20px; border:0; border-radius:10px; background:var(--accent);
+           font-weight:700; cursor:pointer; }
+  .note { font-size:13px; color:var(--sub); max-width:360px; text-align:center; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<div class="reel" id="reel">
+
+  <section class="scene on" data-start="0" data-end="4.42" data-text="집 사거나 팔 때, 이것 모르면 손해입니다!">
+    <div class="tag">2026 부동산 세금</div>
+    <h1>지금 집 사거나 팔 때,<br>이것 모르면 손해봅니다!</h1>
+    <p>세제개편안 핵심 3가지</p>
+  </section>
+
+  <section class="scene" data-start="4.42" data-end="9.70" data-text="2028년부터 종부세, 집 수 말고 집값으로 매겨요.">
+    <div class="tag">① 종합부동산세</div>
+    <h1>2028년부터<br>주택 수 상관없이</h1>
+    <p>집값(과세표준)에 따라 세율 적용</p>
+    <div class="card">
+      <div class="bars">
+        <div class="bar" style="height:20%">0.5%</div>
+        <div class="bar" style="height:45%"></div>
+        <div class="bar" style="height:70%"></div>
+        <div class="bar" style="height:100%">5.0%</div>
+      </div>
+      <div class="labels"><div>낮은 집값</div><div></div><div></div><div>높은 집값</div></div>
+    </div>
+  </section>
+
+  <section class="scene" data-start="9.70" data-end="15.12" data-text="10년 보유하고 거주하면 양도세 공제 연 2,500만 원.">
+    <div class="tag">② 양도소득세</div>
+    <h1>10년 보유·거주하면</h1>
+    <div class="big">250만→2,500만</div>
+    <p>연 기본공제 한도 확대</p>
+    <div class="card"><p style="margin:0">대상: 1세대 1주택 · 10년 이상 거주 · 양도가 30억 원 이하</p></div>
+  </section>
+
+  <section class="scene" data-start="15.12" data-end="20.86" data-text="3주택 이상은 2028년 세금 기준이 80%까지 올라요.">
+    <div class="tag">③ 다주택자</div>
+    <h1>3주택 이상은<br>세금 기준이 올라갑니다</h1>
+    <div class="card">
+      <p style="margin:0">공정시장가액비율</p>
+      <div class="big" style="font-size:40px">60% → 70% → 80%</div>
+      <p style="margin:0">2026 → 2027 → 2028</p>
+    </div>
+  </section>
+
+  <section class="scene" data-start="20.86" data-end="27.41" data-text="2026년 8월 정부 개정안입니다. 확정 전 최종 확인하세요.">
+    <div class="tag">확인 사항</div>
+    <h1>정부 개정안입니다</h1>
+    <p>2026년 8월 3일 발표 기준</p>
+    <p>국회 심의 전이라 바뀔 수 있습니다.<br>실제 신고 전 최종 확인이 필요합니다.</p>
+  </section>
+
+  <div class="caption" id="caption"></div>
+  <div class="bottom"><i id="progress"></i></div>
+</div>
+
+<div class="controls">
+  <button id="play">▶ 재생 (음성 + 자막)</button>
+  <button id="replay">↺ 처음부터</button>
+</div>
+<div class="note">음성: Edge-TTS (audio 폴더, 영상 reel.mp4와 동일). 출처: 세제개편안 관련 보도 (kbthink, khan, inews24, segye 등)</div>
+
+<script>
+(function () {
+  const scenes = Array.from(document.querySelectorAll('.scene'));
+  const caption = document.getElementById('caption');
+  const progress = document.getElementById('progress');
+  const playBtn = document.getElementById('play');
+  const replayBtn = document.getElementById('replay');
+  const TOTAL = 27.41;
+  let timer = null, startTime = 0, current = -1, running = false, voice = null;
+
+  function show(index) {
+    if (index === current) return;
+    current = index;
+    scenes.forEach((s, i) => s.classList.toggle('on', i === index));
+    caption.textContent = scenes[index].dataset.text;
+    speak(index);
+  }
+
+  function speak(index) {
+    try {
+      if (voice) voice.pause();
+      voice = new Audio('audio/scene' + (index + 1) + '.mp3');
+      voice.play().catch(() => {});
+    } catch (e) { /* 음성 파일이 없으면 자막만 표시 */ }
+  }
+
+  function tick() {
+    const t = (performance.now() - startTime) / 1000;
+    progress.style.width = Math.min(100, (t / TOTAL) * 100) + '%';
+    const idx = scenes.findIndex(s => t >= +s.dataset.start && t < +s.dataset.end);
+    if (idx >= 0) show(idx);
+    if (t >= TOTAL) return stop();
+    timer = requestAnimationFrame(tick);
+  }
+
+  function stop() {
+    running = false;
+    cancelAnimationFrame(timer);
+    try { if (voice) voice.pause(); } catch (e) {}
+    playBtn.textContent = '▶ 재생 (음성 + 자막)';
+  }
+
+  function start() {
+    stop();
+    current = -1;
+    startTime = performance.now();
+    running = true;
+    playBtn.textContent = '■ 정지';
+    timer = requestAnimationFrame(tick);
+  }
+
+  playBtn.addEventListener('click', () => (running ? stop() : start()));
+  replayBtn.addEventListener('click', start);
+  scenes[0].classList.add('on');
+  caption.textContent = scenes[0].dataset.text;
+})();
+</script>
+</body>
+</html>

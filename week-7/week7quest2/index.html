@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>뉴스 릴스 공장 - VitaNoa</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.9/babel.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========================================
+    // React Hooks
+    // ========================================
+    const { useState, useEffect, useCallback } = React;
+    const API_BASE_URL = '/api';
+
+    // ========================================
+    // 🎨 Design System Components
+    // ========================================
+    function Button({ variant = 'primary', size = 'md', disabled, onClick, className = '', children }) {
+      const v = {
+        primary: 'bg-rose-500 text-white hover:bg-rose-600',
+        secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100',
+      }[variant];
+      const s = { md: 'px-5 py-3 text-lg', sm: 'px-3 py-2 text-base' }[size];
+      return (
+        <button onClick={onClick} disabled={disabled}
+          className={`rounded-xl font-bold transition disabled:opacity-40 disabled:cursor-not-allowed ${v} ${s} ${className}`}>
+          {children}
+        </button>
+      );
+    }
+
+    function Card({ title, children, className = '' }) {
+      return (
+        <section className={`bg-white rounded-2xl shadow p-5 ${className}`}>
+          {title && <h2 className="text-xl font-extrabold mb-3">{title}</h2>}
+          {children}
+        </section>
+      );
+    }
+
+    function Badge({ ok, children }) {
+      return (
+        <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+          {ok ? '✔ ' : '✘ '}{children}
+        </span>
+      );
+    }
+
+    // ========================================
+    // 🧩 Common Hooks
+    // ========================================
+    async function api(path, opts) {
+      const res = await fetch(API_BASE_URL + path, opts);
+      const j = await res.json();
+      if (!j.success) throw new Error(j.message || '요청 실패');
+      return j.data;
+    }
+
+    // ========================================
+    // 📄 Page Components
+    // ========================================
+    const KEY_LABELS = {
+      NEWSAPI_KEY: 'NewsAPI.org', NEWSDATA_KEY: 'NewsData.io', GNEWS_KEY: 'GNews', GEMINI_API_KEY: '요약(Gemini)',
+      FAL_KEY: 'fal.ai (AI 배경 영상)', META_ACCESS_TOKEN: '메타 토큰', IG_USER_ID: '인스타 번호', FB_PAGE_ID: '페이스북 페이지 번호',
+    };
+    const TOOL_LABELS = { ffmpeg: 'FFmpeg', ytdlp: 'yt-dlp', edgeTts: 'Edge-TTS(Python)', chrome: '크롬/엣지' };
+
+    function KeyForm({ onSaved }) {
+      const [name, setName] = useState('META_ACCESS_TOKEN');
+      const [value, setValue] = useState('');
+      const [msg, setMsg] = useState('');
+      async function save() {
+        try {
+          await api('/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, value }) });
+          setValue(''); setMsg('저장했어요. (값은 이 컴퓨터에만 보관되고 화면에는 다시 보이지 않아요)'); onSaved();
+        } catch (e) { setMsg(e.message); }
+      }
+      return (
+        <div className="mt-4 pt-4 border-t border-slate-200">
+          <p className="font-bold mb-2">키 저장 (이 컴퓨터 서버에만 보관)</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select value={name} onChange={(e) => setName(e.target.value)} aria-label="키 이름" className="border rounded-lg px-3 py-2 text-base">
+              {Object.entries(KEY_LABELS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+            <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="값 붙여넣기"
+              aria-label="키 값" className="border rounded-lg px-3 py-2 text-base flex-1" />
+            <Button size="sm" onClick={save} disabled={!value.trim()}>저장</Button>
+          </div>
+          {msg && <p className="mt-2 text-slate-600" role="status">{msg}</p>}
+        </div>
+      );
+    }
+
+    function StatusPanel({ st, onSaved }) {
+      return (
+        <Card title="준비 상태">
+          <p className="font-bold mb-2">연결 정보</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {Object.entries(KEY_LABELS).map(([k, label]) => <Badge key={k} ok={st.keys[k]}>{label}</Badge>)}
+          </div>
+          <p className="font-bold mb-2">프로그램</p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {Object.entries(TOOL_LABELS).map(([k, label]) => <Badge key={k} ok={st.tools[k]}>{label}</Badge>)}
+          </div>
+          <p className="text-slate-600">내 스톡 영상: {st.bgClips}개 (bg 폴더)</p>
+          {!st.keys.NEWSAPI_KEY && !st.keys.NEWSDATA_KEY && !st.keys.GNEWS_KEY &&
+            <p className="mt-2 text-amber-700 font-bold">뉴스 키가 없어 구글뉴스(무료)로 대신 가져옵니다.</p>}
+          <KeyForm onSaved={onSaved} />
+        </Card>
+      );
+    }
+
+    function RunPanel({ st, onRun, busy }) {
+      return (
+        <Card title="지금 실행">
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => onRun('make')} disabled={busy}>🎬 영상 만들기</Button>
+            <Button variant="secondary" onClick={() => onRun('post-dry')} disabled={busy}>🔎 게시 점검</Button>
+            <Button variant="secondary" onClick={() => onRun('post')} disabled={busy || !st.todayMade}>📤 지금 올리기</Button>
+          </div>
+          <p className="mt-3 text-slate-600">
+            {st.running ? `진행 중: ${st.running} (1~3분 걸려요)` : '매일 18:30 영상 만들기 → 19:20 인스타·페이스북 올리기 (작업 스케줄러)'}
+          </p>
+        </Card>
+      );
+    }
+
+    function LogPanel({ name }) {
+      const [text, setText] = useState('');
+      useEffect(() => {
+        let alive = true;
+        const load = () => api('/log?name=' + name).then((t) => alive && setText(t)).catch(() => {});
+        load();
+        const id = setInterval(load, 4000);
+        return () => { alive = false; clearInterval(id); };
+      }, [name]);
+      return <pre className="bg-slate-900 text-emerald-200 text-sm rounded-xl p-4 overflow-auto max-h-72 whitespace-pre-wrap">{text || '기록이 아직 없어요.'}</pre>;
+    }
+
+    function VideoCard({ v }) {
+      return (
+        <Card>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <video src={v.url} controls playsInline className="w-full sm:w-56 rounded-xl bg-black aspect-[9/16]" />
+            <div className="flex-1 min-w-0">
+              <p className="text-slate-500">{v.date} · {Math.round(v.meta.seconds || 0)}초</p>
+              <h3 className="text-lg font-extrabold break-words">{v.meta.title}</h3>
+              <p className="text-slate-600 mb-2">{v.meta.background}</p>
+              <div className="flex gap-2 mb-2">
+                <Badge ok={!!(v.posted && v.posted.instagram)}>인스타</Badge>
+                <Badge ok={!!(v.posted && v.posted.facebook)}>페이스북</Badge>
+              </div>
+              <pre className="text-sm bg-slate-100 rounded-lg p-3 whitespace-pre-wrap break-words max-h-40 overflow-auto">{v.caption}</pre>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // ========================================
+    // 🚀 App Component
+    // ========================================
+    function App() {
+      const [st, setSt] = useState(null);
+      const [videos, setVideos] = useState(null);
+      const [error, setError] = useState('');
+      const [logName, setLogName] = useState('make');
+
+      const refresh = useCallback(async () => {
+        try { setSt(await api('/status')); setVideos(await api('/videos')); setError(''); }
+        catch (e) { setError(e.message); }
+      }, []);
+
+      useEffect(() => {
+        refresh();
+        const id = setInterval(refresh, 5000);
+        return () => clearInterval(id);
+      }, [refresh]);
+
+      async function run(action) {
+        try {
+          await api('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+          setLogName(action === 'make' ? 'make' : 'post');
+          refresh();
+        } catch (e) { setError(e.message); }
+      }
+
+      if (!st) return <p className="p-8 text-xl">{error || '불러오는 중…'}</p>;
+      return (
+        <main className="max-w-3xl mx-auto p-4 space-y-4">
+          <header className="py-4">
+            <h1 className="text-3xl font-extrabold">뉴스 릴스 공장 <span className="text-rose-500">VitaNoa</span></h1>
+            <p className="text-slate-600 mt-1">매일 새 뉴스를 15~30초 영상으로 만들어 올립니다.</p>
+          </header>
+          {error && <p className="bg-rose-100 text-rose-700 rounded-xl p-3 font-bold" role="alert">{error}</p>}
+          <RunPanel st={st} onRun={run} busy={!!st.running} />
+          <Card title="진행 기록">
+            <div className="flex gap-2 mb-3">
+              <Button size="sm" variant={logName === 'make' ? 'primary' : 'secondary'} onClick={() => setLogName('make')}>영상 만들기</Button>
+              <Button size="sm" variant={logName === 'post' ? 'primary' : 'secondary'} onClick={() => setLogName('post')}>게시</Button>
+            </div>
+            <LogPanel name={logName} />
+          </Card>
+          <StatusPanel st={st} onSaved={refresh} />
+          <h2 className="text-xl font-extrabold pt-2">만든 영상</h2>
+          {videos && videos.length === 0 && <p className="text-slate-500">아직 만든 영상이 없어요. “영상 만들기”를 눌러 보세요.</p>}
+          {videos && videos.map((v) => <VideoCard key={v.date} v={v} />)}
+        </main>
+      );
+    }
+
+    // ========================================
+    // Rendering
+    // ========================================
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
